@@ -1,0 +1,55 @@
+name: 🚀 Worker Feature Request
+description: Propose a new feature or improvement for an OpenRelik worker or library.
+labels: ["enhancement", "worker-feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to suggest improvements to workers or libraries.
+
+  - type: dropdown
+    id: worker_target
+    attributes:
+      label: Target Component
+      description: Which worker or library should this feature be added to?
+      options:
+        - New Worker (Proposal)
+        - openrelik-worker-capa
+        - openrelik-worker-floss
+        - openrelik-worker-common
+        - Other (Please specify in description)
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem_solved
+    attributes:
+      label: What problem does this solve?
+      description: A clear and concise description of what the gap is. 
+      placeholder: "Example: Currently, we cannot process encrypted volumes from..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature_description
+    attributes:
+      label: Proposed Solution
+      description: Describe how you want this feature to work within the worker.
+      placeholder: "I suggest adding a new flag to the worker config that..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any other ways you've tried to achieve this.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a PR to implement this feature.

@@ -1,0 +1,37 @@
+name: 🛠️ Worker Issue Report
+description: Report a bug or request a feature for a specific OpenRelik Component.
+labels: ["worker-issue", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Please ensure you specify which component is affected.
+  
+  - type: dropdown
+    id: worker_name
+    attributes:
+      label: Affected Component
+      description: Which component does this concern?
+      options:
+        - openrelik-worker-capa
+        - openrelik-worker-floss
+        - openrelik-worker-common
+        - Other (Please specify in description)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is happening?
+      placeholder: Describe the bug or the feature request clearly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Please paste any error logs from the container or output.
+      render: shell
