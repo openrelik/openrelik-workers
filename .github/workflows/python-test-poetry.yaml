@@ -1,0 +1,70 @@
+name: run-poetry-unittests
+
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore: &common_exclusions
+      - 'README.md'
+      - '.devcontainer/**'
+      - '.github/**'
+  pull_request:
+    branches: [ main ]
+    paths-ignore: *common_exclusions
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: .github/repos-poetry.yaml
+
+  build:
+    needs: changes
+    if: ${{ needs.changes.outputs.packages != '[]' }}
+    runs-on: ubuntu-latest
+    
+    # This is the "Magic Fix": Every step in this job 
+    # now starts inside the subfolder automatically.
+    defaults:
+      run:
+        working-directory: ${{ matrix.package }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+        package: ${{ fromJSON(needs.changes.outputs.packages) }}
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        # Optional: Caching poetry per subfolder
+        cache: 'pip' 
+
+    - name: Install Poetry
+      # We run this in the subfolder so it finds the correct pyproject.toml
+      run: |
+        pip install poetry
+        poetry install --with test --no-root
+
+    - name: Test with pytest
+      run: |
+        poetry run pytest -s --cov=. --cov-branch --cov-report=xml -v
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        flags: ${{ matrix.package }}
+        # We point to the file relative to the subfolder
+        files: ./${{ matrix.package }}/coverage.xml

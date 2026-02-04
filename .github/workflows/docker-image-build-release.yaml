@@ -1,0 +1,89 @@
+name: build-docker-images-release
+
+on:
+  release:
+    types: [published]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set-services.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Combine filters
+        run: awk 1 .github/repos-poetry.yaml .github/repos-uv.yaml > combined-repos.yaml
+
+      # Determine the final list of services for the matrix
+      - name: Set Service List
+        id: set-services
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            # Extract all top-level keys from the YAML as a JSON array
+            SERVICES=$(yq -o=json -I=0 'keys' combined-repos.yaml)
+            echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-push-image:
+    needs: changes
+    if: ${{ needs.changes.outputs.services != '[]' && needs.changes.outputs.services != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set Clean Service Name
+        id: vars
+        run: |
+          RAW_PATH="${{ matrix.service }}"
+          CLEAN_NAME="${RAW_PATH#*/}"
+          echo "service_name=${CLEAN_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.vars.outputs.service_name }}
+          tags: |
+            type=ref,event=tag
+            type=ref,event=branch
+            type=sha,prefix=
+            # Automatically tags with 'latest' on push to main
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.vars.outputs.service_name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

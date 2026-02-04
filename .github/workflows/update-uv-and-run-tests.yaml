@@ -1,0 +1,50 @@
+name: uv-upgrade-and-run-all-tests
+
+
+on:
+  workflow_dispatch:
+
+jobs:
+  list-services:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: |
+          SERVICES=$(find . -name "uv.lock" | xargs -n 1 dirname | jq -R . | jq -s -c .)
+          echo "matrix=$SERVICES" >> $GITHUB_OUTPUT
+
+  build:
+    needs: list-services
+    if: ${{ needs.list-services.outputs.matrix != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.list-services.outputs.matrix) }}
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5 
+      with:
+        enable-cache: true
+        cache-dependency-glob: "${{ matrix.service }}/uv.lock"
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+   
+    - name: Upgrade Python dependencies with uv
+      run: uv lock --upgrade
+    
+    - name: Install test dependencies
+      run: uv sync --group test
+
+    - name: Test with pytest - ${{ matrix.service }}
+      run: uv run pytest -s --cov=. --cov-branch --cov-report=xml -v

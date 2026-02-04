@@ -1,0 +1,12 @@
+# Showcase this worker on https://openrelik.org/marketplace
+publish: true
+
+# Worker Metadata. This section is required.
+display_name: Capa
+description: Detect capabilities in executable files.
+
+# Optional: Third-Party Tools Used by the Worker.
+tools:
+   - display_name: Capa
+     description: Detect capabilities in executable files.
+     url: https://github.com/mandiant/capa

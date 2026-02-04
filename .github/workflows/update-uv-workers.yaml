@@ -1,0 +1,96 @@
+name: uv-upgrade-workers-and-create-pr
+
+on:
+  workflow_dispatch:
+
+env:
+  ROOT_DIR: workers
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  list-services:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: |
+          SERVICES=$(find ${{ env.ROOT_DIR }} -name "uv.lock" | xargs -n 1 dirname | xargs -n 1 basename | jq -R . | jq -s -c .)
+          echo "matrix=$SERVICES" >> $GITHUB_OUTPUT
+
+  update-locks:
+    needs: list-services
+    if: ${{ needs.list-services.outputs.matrix != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.list-services.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      
+      - name: Update Lockfile and Capture Output
+        working-directory: ${{ env.ROOT_DIR }}/${{ matrix.service }}
+        run: |
+          echo "### Service: ${{ matrix.service }}" > ${{ github.workspace }}/output-${{ matrix.service }}.md
+          echo "\`\`\`" >> ${{ github.workspace }}/output-${{ matrix.service }}.md
+          uv lock --upgrade 2>&1 | tee -a ${{ github.workspace }}/output-${{ matrix.service }}.md
+          echo "\`\`\`" >> ${{ github.workspace }}/output-${{ matrix.service }}.md
+          
+      - name: Upload Lock and Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-${{ matrix.service }}
+          path: |
+            ${{ env.ROOT_DIR }}/${{ matrix.service }}/uv.lock
+            output-${{ matrix.service }}.md
+
+  create-pr:
+    needs: [list-services, update-locks]
+    if: ${{ needs.list-services.outputs.matrix != '[]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all updates
+        uses: actions/download-artifact@v4
+        with:
+          path: all-updates
+          pattern: update-*
+
+      - name: Process Updates and Combine Logs
+        run: |
+          echo "## UV Update Summary" > combined_output.md
+          echo "The following services were updated:" >> combined_output.md
+          
+          for dir in all-updates/update-*; do
+            SERVICE_NAME=$(basename "$dir" | sed 's/^update-//')
+            
+            # Restore lock
+            if [ -f "$dir/${{ env.ROOT_DIR }}/$SERVICE_NAME/uv.lock" ]; then
+              cp "$dir/${{ env.ROOT_DIR }}/$SERVICE_NAME/uv.lock" "${{ env.ROOT_DIR }}/$SERVICE_NAME/uv.lock"
+            fi
+            
+            if [ -f "$dir/output-$SERVICE_NAME.md" ]; then
+              # echo $SERVICE_NAME >> combined_output.md
+              cat "$dir/output-$SERVICE_NAME.md" >> combined_output.md
+              echo -e "\n---\n" >> combined_output.md
+            fi
+          done
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          committer: hacktobeer <ramsesdebeer@gmail.com>
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update all uv lockfiles"
+          title: "Update all worker uv lock files"
+          body-path: combined_output.md
+          branch: update-uv-workers
+          base: main
+          delete-branch: true
+          add-paths: "${{ env.ROOT_DIR }}/**/uv.lock"

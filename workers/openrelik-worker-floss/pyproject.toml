@@ -1,0 +1,38 @@
+[project]
+name = "openrelik-worker-floss"
+version = "0.2.4"
+description = "Worker to run FLARE Obfuscated String Solver"
+authors = [{ name = "Juan Leaniz", email = "juan.leaniz@gmail.com" }]
+requires-python = "<4.0,>=3.11"
+readme = "README.md"
+
+dependencies = [
+    "celery[redis]>=5.4.0,<6",
+    "openrelik-worker-common>=0.17.1,<0.18",
+    "flare-floss>=3.1.1,<4",
+]
+
+[dependency-groups]
+test = [
+    "pytest",
+    "pytest-env",
+    "pytest-cov>=5.0.0,<6",
+    "pytest-mock>=3.14.0,<4",
+    "pytest-celery",
+]
+
+[tool.uv]
+package = false
+default-groups = ["test"]
+
+[build-system]
+requires = ["uv_build>=0.9.0,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+env = [
+    "REDIS_URL=redis://localhost:6379/0",
+    # The following are also good to set for consistency if pytest-celery or other parts of your tests might need them.
+    "CELERY_BROKER_URL=redis://localhost:6379/0",
+    "CELERY_RESULT_BACKEND=redis://localhost:6379/0",
+]

@@ -1,0 +1,12 @@
+# Showcase this worker on https://openrelik.org/marketplace
+publish: true
+
+# Worker Metadata. This section is required.
+display_name: FLARE Obfuscated String Solver (FLOSS)
+description: The FLARE Obfuscated String Solver uses advanced static analysis techniques to automatically extract and deobfuscate all strings from malware binaries.
+
+# Optional: Third-Party Tools Used by the Worker.
+tools:
+   - display_name: FLOSS
+     description: Advanced static analysis techniques to automatically extract and deobfuscate all strings from malware binaries
+     url: https://github.com/mandiant/flare-floss
