@@ -15,6 +15,7 @@ body:
       options:
         - openrelik-worker-capa
         - openrelik-worker-floss
+        - openrelik-worker-yara
         - openrelik-worker-common
         - Other (Please specify in description)
     validations:

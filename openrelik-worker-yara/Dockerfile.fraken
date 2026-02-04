@@ -1,0 +1,16 @@
+FROM rust:alpine AS fraken-builder
+
+WORKDIR /app
+
+RUN apk add --no-cache musl-dev
+
+COPY fraken-x/ .
+
+RUN cargo build --release
+
+# Runtime stage
+FROM alpine:latest
+WORKDIR /app
+COPY --from=fraken-builder /app/target/release/fraken-x .
+# Specify the entrypoint to run your app
+ENTRYPOINT ["/app/fraken-x"]
