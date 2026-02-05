@@ -15,6 +15,7 @@ body:
       options:
         - New Worker (Proposal)
         - openrelik-worker-capa
+        - openrelik-worker-containers
         - openrelik-worker-floss
         - openrelik-worker-os-creds
         - openrelik-worker-yara

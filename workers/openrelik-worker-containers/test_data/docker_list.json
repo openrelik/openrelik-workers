@@ -1,0 +1,29 @@
+[
+    {
+        "Namespace": "",
+        "Hostname": "3062389c72cd",
+        "ImageBase": "nginx:latest",
+        "SupportContainer": false,
+        "ContainerType": "docker",
+        "ProcessID": 0,
+        "Status": "STOPPED",
+        "ID": "3062389c72cd1485dd7caa96bf5877623665f00e74d72c15cf35876af850a2cd",
+        "Labels": null,
+        "Image": "nginx:latest",
+        "Runtime": {
+            "Name": "/docker_container_drift",
+            "Options": null
+        },
+        "Spec": null,
+        "SnapshotKey": "",
+        "Snapshotter": "overlay2",
+        "CreatedAt": "2024-12-15T18:33:20.54503684Z",
+        "UpdatedAt": "0001-01-01T00:00:00Z",
+        "Extensions": null,
+        "SandboxID": "",
+        "Running": false,
+        "ExposedPorts": [
+            "80/tcp"
+        ]
+    }
+]

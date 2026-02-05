@@ -1,0 +1,171 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Contaner task template."""
+
+import logging
+import json
+import os
+import shutil
+import subprocess
+
+from typing import Any
+from uuid import uuid4
+
+
+from openrelik_worker_common.file_utils import create_output_file
+from openrelik_worker_common.file_utils import OutputFile
+from openrelik_worker_common.mount_utils import BlockDevice
+from openrelik_worker_common.reporting import Report
+from openrelik_worker_common.task_utils import create_task_result
+from openrelik_worker_common.task_utils import get_input_files
+
+from .app import celery
+from .utils import container_root_exists
+from .utils import log_entry
+from .utils import COMPATIBLE_INPUTS
+
+# Set up logging
+logger: logging.Logger = logging.getLogger(__name__)
+
+# Task name used to register and route the task to the correct queue.
+TASK_NAME = "openrelik-worker-containers.tasks.container_template"
+
+# Task metadata for registration in the core system.
+TASK_METADATA: dict[str, Any] = {
+    "display_name": "Container: <TASK_NAME>",
+    "description": "<TASK_NAME> description",
+}
+
+
+@celery.task(bind=True, name=TASK_NAME, metadata=TASK_METADATA)
+def container_list(
+    self,
+    pipe_result: str = None,
+    input_files: list[dict] = None,
+    output_path: str = None,
+    workflow_id: str = None,
+    task_config: dict[str, Any] = None,
+) -> str:
+    """Container operation on input files.
+
+    Args:
+        pipe_result: Base64-encoded result from the previous Celery task, if any.
+        input_files: List of input file dictionaries (unused if pipe_result exists).
+        output_path: Path to the output directory.
+        workflow_id: ID of the workflow.
+        task_config: User configuration for the task.
+
+    Returns:
+        Base64-encoded dictionary containing task results.
+    """
+    task_id: str = self.request.id
+    logger.info("Starting task (%s) in workflow (%s)", task_id, workflow_id)
+
+    input_files = get_input_files(
+        pipe_result, input_files or [], filter=COMPATIBLE_INPUTS
+    )
+    output_files: list[dict] = []
+
+    # task_files contains dict of OutputFile for local use only.
+    task_files: list[dict] = []
+
+    # Log file to capture logs.
+    log_file: OutputFile = create_output_file(
+        output_path,
+        extension="log",
+        display_name="<TASK_NAME>",
+    )
+    task_files.append(log_file.to_dict())
+
+    if not input_files:
+        logger.warning("No supported input file extensions.")
+        log_entry(log_file, "No supported input file extensions.")
+
+        report: Report = create_task_report(output_files)
+
+        return create_task_result(
+            workflow_id=workflow_id,
+            output_files=output_files,
+            task_files=task_files,
+            task_report=report.to_dict(),
+        )
+
+    for input_file in input_files:
+        input_file_id: str = input_file.get("id", "")
+        input_file_path: str = input_file.get("path", "")
+
+        try:
+            bd = BlockDevice(input_file_path, max_mountpath_size=8)
+            bd.setup()
+
+            mountpoints: list[str] = bd.mount()
+            if not mountpoints:
+                logger.info("No mountpoints returned for disk %s", input_file_id)
+                logger.info("Unmounting the disk %s", input_file_id)
+
+                bd.umount()
+
+                # Skipping current input_file.
+                continue
+
+            # Process each mountpoint looking for containers
+            for mountpoint in mountpoints:
+                logger.debug(
+                    "Processing mountpoint %s for disk %s", mountpoint, input_file_id
+                )
+
+                # Only process the mountpoint containing valid containerd or Docker root directory.
+                if not container_root_exists(mountpoint):
+                    logger.debug(
+                        "Container root directory does not exist in mount point %s",
+                        mountpoint,
+                    )
+                    log_entry(
+                        log_file,
+                        f"Container directory not found in disk {input_file_id}",
+                    )
+                    continue
+
+                # TODO: Start implementing container task here.
+
+                # End implementing container task here.
+
+        except RuntimeError as e:
+            logger.error(
+                "Encountered unexpected error while processing disk %s", input_file_id
+            )
+        finally:
+            logger.debug("Unmounting disk %s", input_file_id)
+            bd.umount()
+
+        logger.debug("Completed processing %d input disks", len(input_files))
+
+    report: Report = create_task_report(output_files)
+
+    return create_task_result(
+        workflow_id=workflow_id,
+        output_files=output_files,
+        task_files=task_files,
+        task_report=report.to_dict(),
+    )
+
+
+def create_task_report(output_files: list[dict]) -> Report:
+    """Create and return container task report."""
+    report: Report = Report("Container <TASK_NAME> Report")
+
+    # TODO(rmaskey): Add report content.
+
+    return report
