@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     john \
     john-data \
     pocl-opencl-icd \
+    ocl-icd-opencl-dev \
+    clinfo \
     python3-poetry \
     && rm -rf /var/lib/apt/lists/*
 

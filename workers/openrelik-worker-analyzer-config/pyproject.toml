@@ -7,10 +7,10 @@ requires-python = ">=3.12,<4"
 readme = "README.md"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
-    "openrelik-worker-common>=0.17.1,<1.0.0",
+    "openrelik-worker-common>=0.17.1",
     "debugpy>=1.8.7,<2",
-    "openrelik-ai-common>=0.4.0,<0.5",
-    "openrelik-common>=0.7.0,<1.0.0",
+    "openrelik-ai-common>=0.4.0",
+    "openrelik-common>=0.7.0",
 ]
 
 [dependency-groups]
