@@ -14,6 +14,7 @@ body:
       description: Which worker or library should this feature be added to?
       options:
         - New Worker (Proposal)
+        - openrelik-worker-analyzer-config
         - openrelik-worker-capa
         - openrelik-worker-containers
         - openrelik-worker-floss

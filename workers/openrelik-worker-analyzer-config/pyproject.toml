@@ -1,0 +1,28 @@
+[project]
+name = "openrelik-worker-analyzer-config"
+version = "0.2.0"
+description = "Analyze config files"
+authors = [{ name = "Ramses de Beer", email = "ramsesdebeer@gmail.com" }]
+requires-python = ">=3.12,<4"
+readme = "README.md"
+dependencies = [
+    "celery[redis]>=5.4.0,<6",
+    "openrelik-worker-common>=0.17.1,<1.0.0",
+    "debugpy>=1.8.7,<2",
+    "openrelik-ai-common>=0.4.0,<0.5",
+    "openrelik-common>=0.7.0,<1.0.0",
+]
+
+[dependency-groups]
+test = [
+    "pytest",
+    "pytest-cov>=5.0.0,<6",
+]
+
+[tool.uv]
+package = false
+default-groups = ["test"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -13,6 +13,7 @@ body:
       label: Affected Component
       description: Which component does this concern?
       options:
+        - openrelik-worker-analyzer-config
         - openrelik-worker-capa
         - openrelik-worker-containers
         - openrelik-worker-floss
