@@ -6,6 +6,18 @@ body:
     attributes:
       value: |
         Thanks for taking the time to report an issue! Please ensure you specify which component is affected.
+        
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Issue Type
+      description: What kind of issue are you reporting?
+      options:
+        - 🐛 Bug
+        - ✨ Feature Request
+        - 🛠️ Task
+    validations:
+      required: true
   
   - type: dropdown
     id: worker_name
