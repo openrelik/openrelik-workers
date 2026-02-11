@@ -21,6 +21,7 @@ from threading import Thread
 from unittest.mock import patch
 
 from fakeredis import TcpFakeServer
+from freezegun import freeze_time
 
 from src.tasks import run_ssh_analyzer
 
@@ -84,8 +85,26 @@ def tearDownModule():
 
 
 class TestTasks:
+    @freeze_time("2025-12-30 03:20:00")
     @patch("src.app.redis.Redis.from_url")
     def test_run_ssh_analyzer(self, mock_redisclient):
+        """Test LinuxSSHAnalysis task run."""
+
+        output = run_ssh_analyzer(
+            input_files=_INPUT_FILES,
+            output_path="/tmp",
+            workflow_id="deadbeef",
+            task_config={},
+        )
+
+        output_dict = json.loads(base64.b64decode(output))
+        output_path = output_dict.get("output_files")[0].get("path")
+        assert filecmp.cmp(
+            output_path, "test_data/linux_ssh_analysis.md", shallow=False
+        )
+
+    @patch("src.app.redis.Redis.from_url")
+    def test_run_ssh_analyzer_with_log_year(self, mock_redisclient):
         """Test LinuxSSHAnalysis task run."""
 
         output = run_ssh_analyzer(
