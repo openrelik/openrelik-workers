@@ -15,7 +15,7 @@ openrelik-worker-common = "^0.10.0"
 pytest = "*"
 pytest-cov = "^5.0.0"
 pytest-mock = "^3.14.0"
-Pillow = "^10.0.0" # For image creation
+Pillow = "^12.1.1" # For image creation
 piexif = "^1.1.3"  # For EXIF manipulation
 
 [build-system]
