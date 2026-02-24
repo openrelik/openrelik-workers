@@ -44,16 +44,22 @@ def command(
     workflow_id: str = None,
     task_config: dict = None,
 ) -> str:
-    """Run bulk_extractor on input files.
+    """
+    Run bulk_extractor on input files.
+
     Args:
-        pipe_result: Base64-encoded result from the previous Celery task, if any.
-        input_files: List of input file dictionaries (unused if pipe_result exists).
-        output_path: Path to the output directory.
-        workflow_id: ID of the workflow.
-        task_config: User configuration for the task.
+        self: The Celery task instance.
+        pipe_result (str, optional): Base64-encoded result from a previous Celery task.
+        input_files (list, optional): A list of dictionaries representing input files.
+        output_path (str, optional): Path to the output directory.
+        workflow_id (str, optional): The ID of the OpenRelik workflow.
+        task_config (dict, optional): A dictionary containing user configuration.
 
     Returns:
-        Base64-encoded dictionary containing task results.
+        str: A Base64-encoded dictionary string containing the task results.
+
+    Raises:
+        RuntimeError: If bulk_extractor fails or if the output directory is missing.
     """
     input_files = get_input_files(pipe_result, input_files or [])
     output_files = []
@@ -63,15 +69,15 @@ def command(
         base_command = ["bulk_extractor"]
         report_file = create_output_file(
             output_path,
-            display_name=f"Report_{input_file.get("display_name")}.html",
+            display_name=f"Report_{input_file.get('display_name')}.html",
         )
         tmp_artifacts_dir = os.path.join(output_path, uuid4().hex)
         base_command.extend(["-o", tmp_artifacts_dir])
         base_command_string = " ".join(base_command)
-        command = base_command + [input_file.get("path")]
+        command_list = base_command + [input_file.get("path")]
 
         # Run the command
-        process  = subprocess.Popen(command)
+        process = subprocess.Popen(command_list)
         process.wait()
         if process.returncode == 0:
             # Execution complete, verify the results
@@ -80,13 +86,22 @@ def command(
                 with open(report_file.path, "w") as fh:
                     fh.write(report.to_markdown())
                 output_files.append(report_file.to_dict())
-                output_files.extend(extract_non_empty_files(tmp_artifacts_dir, output_path))
-                file_reports.append(serialize_file_report(input_file, report_file, report))
+                output_files.extend(
+                    extract_non_empty_files(tmp_artifacts_dir, output_path)
+                )
+                file_reports.append(
+                    serialize_file_report(input_file, report_file, report)
+                )
             else:
-                print("os.path.exists({}):{} when expected True".format(tmp_artifacts_dir, os.path.exists(tmp_artifacts_dir)))
-                raise
+                raise RuntimeError(
+                    f"Bulk Extractor successful but output directory "
+                    f"'{tmp_artifacts_dir}' was not created."
+                )
         else:
-            raise
+            raise RuntimeError(
+                f"Bulk Extractor failed with exit code {process.returncode}."
+            )
+
         if os.path.exists(tmp_artifacts_dir):
             shutil.rmtree(tmp_artifacts_dir)
 
@@ -100,4 +115,3 @@ def command(
         meta={},
         file_reports=file_reports,
     )
-
