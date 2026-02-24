@@ -184,6 +184,27 @@ def upload(
     Returns:
         str: A Base64-encoded dictionary string containing the task results.
     """
+    return _upload(
+        pipe_result=pipe_result,
+        input_files=input_files,
+        output_path=output_path,
+        workflow_id=workflow_id,
+        task_config=task_config,
+    )
+
+
+def _upload(
+    pipe_result: str = None,
+    input_files: list = None,
+    output_path: str = None,
+    workflow_id: str = None,
+    task_config: dict = None,
+) -> str:
+    """Helper function to perform the upload.
+    
+    Note: This is separated from the @celery.task decorated 'upload' function
+    to allow for clean unit testing without Celery proxy/decorator interference.
+    """
     input_files = get_input_files(pipe_result, input_files or [])
 
     # Connection details from environment variables.
