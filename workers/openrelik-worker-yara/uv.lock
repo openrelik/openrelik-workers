@@ -95,11 +95,11 @@ redis = [
 
 [[package]]
 name = "certifi"
-version = "2026.1.4"
+version = "2026.2.25"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e0/2d/a891ca51311197f6ad14a7ef42e2399f36cf2f9bd44752b3dc4eab60fdc5/certifi-2026.1.4.tar.gz", hash = "sha256:ac726dd470482006e014ad384921ed6438c457018f4b3d204aea4281258b2120", size = 154268, upload-time = "2026-01-04T02:42:41.825Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/af/2d/7bf41579a8986e348fa033a31cdd0e4121114f6bce2457e8876010b092dd/certifi-2026.2.25.tar.gz", hash = "sha256:e887ab5cee78ea814d3472169153c2d12cd43b14bd03329a39a9c6e2e80bfba7", size = 155029, upload-time = "2026-02-25T02:54:17.342Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/ad/3cc14f097111b4de0040c83a525973216457bbeeb63739ef1ed275c1c021/certifi-2026.1.4-py3-none-any.whl", hash = "sha256:9943707519e4add1115f44c2bc244f782c0249876bf51b6599fee1ffbedd685c", size = 152900, upload-time = "2026-01-04T02:42:40.15Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/3c/c17fb3ca2d9c3acff52e30b309f538586f9f5b9c9cf454f3845fc9af4881/certifi-2026.2.25-py3-none-any.whl", hash = "sha256:027692e4402ad994f1c42e52a4997a9763c646b73e4096e4d5d6db8af1d6f0fa", size = 153684, upload-time = "2026-02-25T02:54:15.766Z" },
 ]
 
 [[package]]
@@ -698,7 +698,7 @@ redis = [
 
 [[package]]
 name = "openrelik-common"
-version = "0.7.6"
+version = "0.7.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "billiard" },
@@ -710,9 +710,9 @@ dependencies = [
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/ee/164e02f5d0aecbd5a0dd868c6e51a052ca9fd6c9b609900ccfd5e586d57d/openrelik_common-0.7.6.tar.gz", hash = "sha256:ce499fb35754a29fa13436cebd263cb45e35c308fb94da10411fef6659c54eb9", size = 7827, upload-time = "2026-02-01T10:06:05.718Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/00/c7361d6919a571373f03a31cc339c4177e2f8c41d8272b4a9fc2a146e7b6/openrelik_common-0.7.7.tar.gz", hash = "sha256:c75fa4ce5a1f49a22e087fc4bf04e3373c77f782413372a3be9a6288df47d0b2", size = 7977, upload-time = "2026-02-26T12:51:13.597Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/25/14/8761cec006d85c6e5be600b8ecbdaac20011ec0220bb6bd947820d307404/openrelik_common-0.7.6-py3-none-any.whl", hash = "sha256:4b10dde8d62c54380e0beea94d9594f2bf9d52d02fd14f7328cd42e3beb4f480", size = 9143, upload-time = "2026-02-01T10:06:04.175Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/8b/ef7be9c95ac6751c37c019cab2564fd2ac24f7e3f6dacc9c59ef2ce13eee/openrelik_common-0.7.7-py3-none-any.whl", hash = "sha256:60c4b9c46a88529975077deb82ce7cdcbce5347e6d5ba0e7ef5ab1a2f790f13e", size = 9316, upload-time = "2026-02-26T12:51:12.058Z" },
 ]
 
 [[package]]
