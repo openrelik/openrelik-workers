@@ -22,7 +22,7 @@ from timesketch_import_client import importer
 from .app import celery, redis_client
 
 # Hardcoded list of available Timesketch analyzers
-TIMESKETCH_ANALYZERS =[
+TIMESKETCH_ANALYZERS = [
     "account_finder",
     "browser_search",
     "browser_timeframe",
@@ -35,18 +35,19 @@ TIMESKETCH_ANALYZERS =[
     "yetitriageindicators",
     "yetibadnessindicators",
     "yetilolbasindicators",
-    "yetiinvestigations"
+    "yetiinvestigations",
 ]
 
-TIMELINE_STATUS_TIMEOUT = 240
+MAX_INDEXING_RETRIES = 240
+POLL_INTERVAL_SECONDS = 5
 
 
 def get_or_create_sketch(
     timesketch_api_client,
     redis_client,
-    sketch_id=None,
-    sketch_name=None,
-    workflow_id=None,
+    sketch_id: int | str | None = None,
+    sketch_name: str | None = None,
+    workflow_id: str | None = None,
 ):
     """
     Retrieves or creates a sketch, handling locking if needed.
@@ -95,7 +96,7 @@ TASK_NAME = "openrelik-worker-timesketch.tasks.upload"
 TASK_METADATA = {
     "display_name": "Upload to Timesketch",
     "description": "Upload resulting file to Timesketch",
-    "task_config":[
+    "task_config": [
         {
             "name": "sketch_id",
             "label": "Add to an existing sketch",
@@ -173,7 +174,7 @@ def upload(
     Returns:
         Base64-encoded dictionary containing task results.
     """
-    input_files = get_input_files(pipe_result, input_files or[])
+    input_files = get_input_files(pipe_result, input_files or [])
     task_config = task_config or {}
 
     # Connection details from environment variables.
@@ -185,10 +186,9 @@ def upload(
     # User supplied config.
     sketch_id = task_config.get("sketch_id")
     sketch_name = task_config.get("sketch_name")
-    sketch_identifier = {"sketch_id": sketch_id} if sketch_id else {"sketch_name": sketch_name}
 
     # Analyzers config
-    selected_analyzers = task_config.get("analyzers",[])
+    selected_analyzers = task_config.get("analyzers", [])
 
     # Extract Access Control Config safely
     make_private = task_config.get("make_private", False)
@@ -200,7 +200,7 @@ def upload(
     shared_users = []
     if shared_users_str:
         # Split by comma, trim whitespace, and ignore empty strings
-        shared_users =[u.strip() for u in shared_users_str.split(",") if u.strip()]
+        shared_users = [u.strip() for u in shared_users_str.split(",") if u.strip()]
 
     # Create a Timesketch API client.
     timesketch_api_client = timesketch_client.TimesketchApi(
@@ -210,13 +210,17 @@ def upload(
     )
 
     # UI Update: Initializing
-    self.send_event("task-progress", data={"status": "Connecting to Timesketch API and configuring Sketch..."})
+    self.send_event(
+        "task-progress",
+        data={"status": "Connecting to Timesketch API and configuring Sketch..."},
+    )
 
     # Get or create sketch using a distributed lock.
     sketch = get_or_create_sketch(
         timesketch_api_client,
         redis_client,
-        **sketch_identifier,
+        sketch_id=sketch_id,
+        sketch_name=sketch_name,
         workflow_id=workflow_id,
     )
 
@@ -226,7 +230,7 @@ def upload(
     # Apply Access Controls to the sketch
     sketch.add_to_acl(make_public=is_public, user_list=shared_users)
 
-    warnings =[]
+    warnings = []
     uploaded_timelines = []
     total_files = len(input_files)
 
@@ -245,12 +249,15 @@ def upload(
         timeline = None
 
         # UI Update: Uploading
-        self.send_event("task-progress", data={
-            "status": "Uploading file to Timesketch",
-            "progress": f"File {index} of {total_files}",
-            "current_file": file_display_name,
-            "timeline_name": timeline_name
-        })
+        self.send_event(
+            "task-progress",
+            data={
+                "status": "Uploading file to Timesketch",
+                "progress": f"File {index} of {total_files}",
+                "current_file": file_display_name,
+                "timeline_name": timeline_name,
+            },
+        )
 
         with importer.ImportStreamer() as streamer:
             streamer.set_sketch(sketch)
@@ -262,14 +269,11 @@ def upload(
 
         # Append to our summary list
         if timeline:
-            uploaded_timelines.append({
-                "ID": timeline.id,
-                "Name": timeline.name
-            })
+            uploaded_timelines.append({"ID": timeline.id, "Name": timeline.name})
 
         # If the user selected analyzers, we must wait for indexing to complete
         if selected_analyzers and timeline:
-            max_retries = TIMELINE_STATUS_TIMEOUT
+            max_retries = MAX_INDEXING_RETRIES
             retry_count = 0
 
             while retry_count < max_retries:
@@ -277,30 +281,36 @@ def upload(
                 current_status = timeline.status
 
                 # UI Update: Indexing
-                self.send_event("task-progress", data={
-                    "status": "Waiting for Timesketch internal indexing to finish",
-                    "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
-                    "progress": f"File {index} of {total_files}",
-                    "current_file": file_display_name,
-                    "timesketch_status": current_status,
-                    "time_elapsed": f"{retry_count * 5}s (Timeout at {max_retries * 5}s)"
-                })
+                self.send_event(
+                    "task-progress",
+                    data={
+                        "status": "Waiting for Timesketch internal indexing to finish",
+                        "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
+                        "progress": f"File {index} of {total_files}",
+                        "current_file": file_display_name,
+                        "timesketch_status": current_status,
+                        "time_elapsed": f"{retry_count * POLL_INTERVAL_SECONDS}s (Timeout at {max_retries * POLL_INTERVAL_SECONDS}s)",
+                    },
+                )
 
                 if current_status == "ready":
                     break
                 retry_count += 1
-                time.sleep(5)
+                time.sleep(POLL_INTERVAL_SECONDS)
 
             # Once ready, trigger the analyzers
             if timeline.status == "ready":
                 # UI Update: Triggering analyzers
-                self.send_event("task-progress", data={
-                    "status": "Triggering Analyzers in Timesketch",
-                    "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
-                    "progress": f"File {index} of {total_files}",
-                    "current_file": file_display_name,
-                    "analyzers_queued": len(selected_analyzers)
-                })
+                self.send_event(
+                    "task-progress",
+                    data={
+                        "status": "Triggering Analyzers in Timesketch",
+                        "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
+                        "progress": f"File {index} of {total_files}",
+                        "current_file": file_display_name,
+                        "analyzers_queued": len(selected_analyzers),
+                    },
+                )
 
                 for analyzer in selected_analyzers:
                     timeline.run_analyzer(analyzer)
@@ -309,7 +319,7 @@ def upload(
                 warning_msg = (
                     f"Analyzers for timeline '{timeline_name}' were skipped "
                     "because the timeline was not ready within "
-                    f"{TIMELINE_STATUS_TIMEOUT*5} seconds!"
+                    f"{max_retries * POLL_INTERVAL_SECONDS} seconds!"
                 )
                 warnings.append(warning_msg)
 
@@ -320,7 +330,7 @@ def upload(
 
     # Flatten the uploaded timelines into a single, readable string
     timelines_summary = ", ".join(
-        [f"\"{t['Name']}\" (ID: {t['ID']})" for t in uploaded_timelines]
+        f'"{t["Name"]}" (ID: {t["ID"]})' for t in uploaded_timelines
     )
     if timelines_summary:
         meta_result["uploaded_timelines"] = timelines_summary
@@ -330,7 +340,9 @@ def upload(
         meta_result["warnings"] = " | ".join(warnings)
 
     # UI Update: Finished
-    self.send_event("task-progress", data={"status": "Done! Finished exporting to Timesketch."})
+    self.send_event(
+        "task-progress", data={"status": "Done! Finished exporting to Timesketch."}
+    )
 
     return create_task_result(
         output_files=[],
