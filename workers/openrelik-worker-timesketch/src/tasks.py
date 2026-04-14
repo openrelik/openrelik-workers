@@ -205,6 +205,9 @@ def upload(
         password=timesketch_password,
     )
 
+    # UI Update: Initializing
+    self.send_event("task-progress", data={"status": "Connecting to Timesketch API and configuring Sketch..."})
+
     # Get or create sketch using a distributed lock.
     sketch = get_or_create_sketch(
         timesketch_api_client,
@@ -220,13 +223,30 @@ def upload(
     sketch.add_to_acl(make_public=is_public, user_list=shared_users)
 
     warnings =[]
+    total_files = len(input_files)
 
     # Import each input file to its own index.
-    for input_file in input_files:
+    for index, input_file in enumerate(input_files, start=1):
         input_file_path = input_file.get("path")
-        timeline_name = task_config.get("timeline_name") or input_file.get("display_name")
+        file_display_name = input_file.get("display_name")
+
+        # Prevent identical timeline names if multiple files are processed
+        base_name = task_config.get("timeline_name")
+        if base_name and total_files > 1:
+            timeline_name = f"{base_name} - {file_display_name}"
+        else:
+            timeline_name = base_name or file_display_name
 
         timeline = None
+
+        # UI Update: Uploading
+        self.send_event("task-progress", data={
+            "status": "Uploading file to Timesketch",
+            "progress": f"File {index} of {total_files}",
+            "current_file": file_display_name,
+            "timeline_name": timeline_name
+        })
+
         with importer.ImportStreamer() as streamer:
             streamer.set_sketch(sketch)
             streamer.set_timeline_name(timeline_name)
@@ -237,17 +257,39 @@ def upload(
 
         # If the user selected analyzers, we must wait for indexing to complete
         if selected_analyzers and timeline:
-            max_retries = TIMELINE_STATUS_TIMEOUT  # Wait up to 20 minutes (120 * 5s) for indexing to finish
+            max_retries = TIMELINE_STATUS_TIMEOUT
             retry_count = 0
 
             while retry_count < max_retries:
-                if timeline.status == "ready":
+                # Always fetch the latest status to display
+                current_status = timeline.status
+
+                # UI Update: Indexing
+                self.send_event("task-progress", data={
+                    "status": "Waiting for Timesketch internal indexing to finish",
+                    "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
+                    "progress": f"File {index} of {total_files}",
+                    "current_file": file_display_name,
+                    "timesketch_status": current_status,
+                    "time_elapsed": f"{retry_count * 5}s (Timeout at {max_retries * 5}s)"
+                })
+
+                if current_status == "ready":
                     break
                 retry_count += 1
                 time.sleep(5)
 
             # Once ready, trigger the analyzers
             if timeline.status == "ready":
+                # UI Update: Triggering analyzers
+                self.send_event("task-progress", data={
+                    "status": "Triggering Analyzers in Timesketch",
+                    "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
+                    "progress": f"File {index} of {total_files}",
+                    "current_file": file_display_name,
+                    "analyzers_queued": len(selected_analyzers)
+                })
+
                 for analyzer in selected_analyzers:
                     timeline.run_analyzer(analyzer)
             else:
@@ -266,7 +308,10 @@ def upload(
 
     # If any warnings occurred, append them so they appear in the UI
     if warnings:
-        meta_result["Warnings"] = warnings
+        meta_result["warnings"] = warnings
+
+    # UI Update: Finished
+    self.send_event("task-progress", data={"status": "Done! Finished exporting to Timesketch."})
 
     return create_task_result(
         output_files=[],
