@@ -227,6 +227,7 @@ def upload(
     sketch.add_to_acl(make_public=is_public, user_list=shared_users)
 
     warnings =[]
+    uploaded_timelines = []
     total_files = len(input_files)
 
     # Import each input file to its own index.
@@ -258,6 +259,13 @@ def upload(
 
             # Grab the timeline object before context closes so we can query it later
             timeline = streamer.timeline
+
+        # Append to our summary list
+        if timeline:
+            uploaded_timelines.append({
+                "ID": timeline.id,
+                "Name": timeline.name
+            })
 
         # If the user selected analyzers, we must wait for indexing to complete
         if selected_analyzers and timeline:
@@ -307,12 +315,19 @@ def upload(
 
     # Create the metadata dictionary
     meta_result = {
-        "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}"
+        "sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
     }
+
+    # Flatten the uploaded timelines into a single, readable string
+    timelines_summary = ", ".join(
+        [f"\"{t['Name']}\" (ID: {t['ID']})" for t in uploaded_timelines]
+    )
+    if timelines_summary:
+        meta_result["uploaded_timelines"] = timelines_summary
 
     # If any warnings occurred, append them so they appear in the UI
     if warnings:
-        meta_result["warnings"] = warnings
+        meta_result["warnings"] = " | ".join(warnings)
 
     # UI Update: Finished
     self.send_event("task-progress", data={"status": "Done! Finished exporting to Timesketch."})
