@@ -138,11 +138,12 @@ TASK_METADATA = {
             "required": False,
         },
         {
-            "name": "is_public",
-            "label": "Public",
+            "name": "make_private",
+            "label": "Set Sketch as Private",
             "description": (
-                "Make sketch public? If enabled, the sketch will be visible to "
-                "all users on the Timesketch instance."
+                "By default, sketches are public so you can view them. "
+                "If you check this, ONLY the users specified in the shared "
+                "list above will have access."
             ),
             "type": "checkbox",
             "required": False,
@@ -190,7 +191,10 @@ def upload(
     selected_analyzers = task_config.get("analyzers",[])
 
     # Extract Access Control Config safely
-    is_public = task_config.get("is_public", False)
+    make_private = task_config.get("make_private", False)
+
+    # Because it defaults to false (unchecked), is_public becomes True
+    is_public = not make_private
 
     shared_users_str = task_config.get("shared_users", "")
     shared_users = []
