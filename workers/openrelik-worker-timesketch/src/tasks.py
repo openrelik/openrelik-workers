@@ -30,7 +30,7 @@ def get_or_create_sketch(
 ):
     """
     Retrieves or creates a sketch, handling locking if needed.
-    This uses Redis distrubuted lock to avoid race conditions.
+    This uses Redis distributed lock to avoid race conditions.
 
     Args:
         client: Timesketch API client.
@@ -97,6 +97,26 @@ TASK_METADATA = {
             "type": "text",
             "required": False,
         },
+        {
+            "name": "shared_users",
+            "label": "Share with Timesketch users",
+            "description": (
+                "Comma-separated list of Timesketch usernames to share the "
+                "sketch with (e.g., admin,user1@example.com)."
+            ),
+            "type": "text",
+            "required": False,
+        },
+        {
+            "name": "is_public",
+            "label": "Public",
+            "description": (
+                "Make sketch public? If enabled, the sketch will be visible to "
+                "all users on the Timesketch instance."
+            ),
+            "type": "checkbox",
+            "required": False,
+        },
     ],
 }
 
@@ -123,6 +143,7 @@ def upload(
         Base64-encoded dictionary containing task results.
     """
     input_files = get_input_files(pipe_result, input_files or [])
+    task_config = task_config or {}
 
     # Connection details from environment variables.
     timesketch_server_url = os.environ.get("TIMESKETCH_SERVER_URL")
@@ -134,6 +155,15 @@ def upload(
     sketch_id = task_config.get("sketch_id")
     sketch_name = task_config.get("sketch_name")
     sketch_identifier = {"sketch_id": sketch_id} if sketch_id else {"sketch_name": sketch_name}
+
+    # Extract Access Control Config safely
+    is_public = task_config.get("is_public", False)
+
+    shared_users_str = task_config.get("shared_users", "")
+    shared_users =[]
+    if shared_users_str:
+        # Split by comma, trim whitespace, and ignore empty strings
+        shared_users =[u.strip() for u in shared_users_str.split(",") if u.strip()]
 
     # Create a Timesketch API client.
     timesketch_api_client = timesketch_client.TimesketchApi(
@@ -153,9 +183,8 @@ def upload(
     if not sketch:
         raise Exception(f"Failed to create or retrieve sketch '{sketch_name}'")
 
-    # Make the sketch public.
-    # TODO: Make this user configurable.
-    sketch.add_to_acl(make_public=True)
+    # Apply Access Controls to the sketch
+    sketch.add_to_acl(make_public=is_public, user_list=shared_users)
 
     # Import each input file to it's own index.
     for input_file in input_files:
