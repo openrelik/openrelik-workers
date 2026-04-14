@@ -13,12 +13,32 @@
 # limitations under the License.
 
 import os
+import time
 
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 from timesketch_api_client import client as timesketch_client
 from timesketch_import_client import importer
 
 from .app import celery, redis_client
+
+# Hardcoded list of available Timesketch analyzers
+TIMESKETCH_ANALYZERS =[
+    "account_finder",
+    "browser_search",
+    "browser_timeframe",
+    "domain",
+    "feature_extraction",
+    "hashr_lookup",
+    "tagger",
+    "yetikeywords",
+    "yetibloomchecker",
+    "yetitriageindicators",
+    "yetibadnessindicators",
+    "yetilolbasindicators",
+    "yetiinvestigations"
+]
+
+TIMELINE_STATUS_TIMEOUT = 240
 
 
 def get_or_create_sketch(
@@ -75,7 +95,7 @@ TASK_NAME = "openrelik-worker-timesketch.tasks.upload"
 TASK_METADATA = {
     "display_name": "Upload to Timesketch",
     "description": "Upload resulting file to Timesketch",
-    "task_config": [
+    "task_config":[
         {
             "name": "sketch_id",
             "label": "Add to an existing sketch",
@@ -95,6 +115,16 @@ TASK_METADATA = {
             "label": "Name of the timeline to create",
             "description": "Timeline name",
             "type": "text",
+            "required": False,
+        },
+        {
+            "name": "analyzers",
+            "label": "Select Analyzers",
+            "description": (
+                "Select Timesketch Analyzers to run on the timeline after upload."
+            ),
+            "type": "autocomplete",
+            "items": TIMESKETCH_ANALYZERS,
             "required": False,
         },
         {
@@ -142,7 +172,7 @@ def upload(
     Returns:
         Base64-encoded dictionary containing task results.
     """
-    input_files = get_input_files(pipe_result, input_files or [])
+    input_files = get_input_files(pipe_result, input_files or[])
     task_config = task_config or {}
 
     # Connection details from environment variables.
@@ -156,11 +186,14 @@ def upload(
     sketch_name = task_config.get("sketch_name")
     sketch_identifier = {"sketch_id": sketch_id} if sketch_id else {"sketch_name": sketch_name}
 
+    # Analyzers config
+    selected_analyzers = task_config.get("analyzers",[])
+
     # Extract Access Control Config safely
     is_public = task_config.get("is_public", False)
 
     shared_users_str = task_config.get("shared_users", "")
-    shared_users =[]
+    shared_users = []
     if shared_users_str:
         # Split by comma, trim whitespace, and ignore empty strings
         shared_users =[u.strip() for u in shared_users_str.split(",") if u.strip()]
@@ -186,18 +219,58 @@ def upload(
     # Apply Access Controls to the sketch
     sketch.add_to_acl(make_public=is_public, user_list=shared_users)
 
-    # Import each input file to it's own index.
+    warnings =[]
+
+    # Import each input file to its own index.
     for input_file in input_files:
         input_file_path = input_file.get("path")
         timeline_name = task_config.get("timeline_name") or input_file.get("display_name")
+
+        timeline = None
         with importer.ImportStreamer() as streamer:
             streamer.set_sketch(sketch)
             streamer.set_timeline_name(timeline_name)
             streamer.add_file(input_file_path)
 
+            # Grab the timeline object before context closes so we can query it later
+            timeline = streamer.timeline
+
+        # If the user selected analyzers, we must wait for indexing to complete
+        if selected_analyzers and timeline:
+            max_retries = TIMELINE_STATUS_TIMEOUT  # Wait up to 20 minutes (120 * 5s) for indexing to finish
+            retry_count = 0
+
+            while retry_count < max_retries:
+                if timeline.status == "ready":
+                    break
+                retry_count += 1
+                time.sleep(5)
+
+            # Once ready, trigger the analyzers
+            if timeline.status == "ready":
+                for analyzer in selected_analyzers:
+                    timeline.run_analyzer(analyzer)
+            else:
+                # Add a warning message if it timed out
+                warning_msg = (
+                    f"Analyzers for timeline '{timeline_name}' were skipped "
+                    "because the timeline was not ready within "
+                    f"{TIMELINE_STATUS_TIMEOUT*5} seconds!"
+                )
+                warnings.append(warning_msg)
+
+    # Create the metadata dictionary
+    meta_result = {
+        "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}"
+    }
+
+    # If any warnings occurred, append them so they appear in the UI
+    if warnings:
+        meta_result["Warnings"] = warnings
+
     return create_task_result(
         output_files=[],
         workflow_id=workflow_id,
         command="Timesketch Importer Client",
-        meta={"sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}"},
+        meta=meta_result,
     )
