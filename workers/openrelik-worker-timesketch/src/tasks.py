@@ -66,7 +66,10 @@ def get_or_create_sketch(
     sketch = None
 
     if sketch_id:
-        sketch = timesketch_api_client.get_sketch(int(sketch_id))
+        try:
+            sketch = timesketch_api_client.get_sketch(int(sketch_id))
+        except ValueError:
+            raise ValueError(f"Sketch ID must be a number. Received: '{sketch_id}'")
     elif sketch_name:
         sketch = timesketch_api_client.create_sketch(sketch_name)
     else:
@@ -121,9 +124,7 @@ TASK_METADATA = {
         {
             "name": "analyzers",
             "label": "Select Analyzers",
-            "description": (
-                "Select Timesketch Analyzers to run on the timeline after upload."
-            ),
+            "description": "Select Timesketch Analyzers to run on the timeline after upload.",
             "type": "autocomplete",
             "items": TIMESKETCH_ANALYZERS,
             "required": False,
@@ -179,6 +180,11 @@ def upload(
 
     # Connection details from environment variables.
     timesketch_server_url = os.environ.get("TIMESKETCH_SERVER_URL")
+    if not timesketch_server_url:
+        raise RuntimeError(
+            "TIMESKETCH_SERVER_URL environment variable is not set on the worker."
+        )
+
     timesketch_server_public_url = os.environ.get("TIMESKETCH_SERVER_PUBLIC_URL")
     timesketch_username = os.environ.get("TIMESKETCH_USERNAME")
     timesketch_password = os.environ.get("TIMESKETCH_PASSWORD")
@@ -192,8 +198,12 @@ def upload(
 
     # Extract Access Control Config safely
     make_private = task_config.get("make_private", False)
+    if isinstance(make_private, str):
+        make_private = make_private.lower() in ["true", "1", "yes"]
+    else:
+        make_private = bool(make_private)
 
-    # Because it defaults to false (unchecked), is_public becomes True
+    # Public Sketch is the default!
     is_public = not make_private
 
     shared_users_str = task_config.get("shared_users", "")
@@ -225,7 +235,9 @@ def upload(
     )
 
     if not sketch:
-        raise Exception(f"Failed to create or retrieve sketch '{sketch_name}'")
+        raise Exception(
+            f"Failed to create or retrieve sketch '{sketch_name or sketch_id}'"
+        )
 
     # Apply Access Controls to the sketch
     sketch.add_to_acl(make_public=is_public, user_list=shared_users)
@@ -293,8 +305,9 @@ def upload(
                     },
                 )
 
-                if current_status == "ready":
+                if current_status in ["ready", "fail"]:
                     break
+
                 retry_count += 1
                 time.sleep(POLL_INTERVAL_SECONDS)
 
@@ -314,14 +327,15 @@ def upload(
 
                 for analyzer in selected_analyzers:
                     timeline.run_analyzer(analyzer)
+            elif timeline.status == "fail":
+                warnings.append(
+                    f"Analyzers for timeline '{timeline_name}' skipped because Timesketch failed to index the file."
+                )
             else:
-                # Add a warning message if it timed out
-                warning_msg = (
-                    f"Analyzers for timeline '{timeline_name}' were skipped "
-                    "because the timeline was not ready within "
+                warnings.append(
+                    f"Analyzers for timeline '{timeline_name}' skipped because it was not ready within "
                     f"{max_retries * POLL_INTERVAL_SECONDS} seconds!"
                 )
-                warnings.append(warning_msg)
 
     # Create the metadata dictionary
     meta_result = {
