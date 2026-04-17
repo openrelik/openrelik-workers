@@ -140,6 +140,16 @@ TASK_METADATA = {
             "required": False,
         },
         {
+            "name": "shared_groups",
+            "label": "Share with Timesketch groups",
+            "description": (
+                "Comma-separated list of Timesketch groups to share the "
+                "sketch with (e.g., DF,SOC)."
+            ),
+            "type": "text",
+            "required": False,
+        },
+        {
             "name": "make_private",
             "label": "Set Sketch as Private",
             "description": (
@@ -212,6 +222,12 @@ def upload(
         # Split by comma, trim whitespace, and ignore empty strings
         shared_users = [u.strip() for u in shared_users_str.split(",") if u.strip()]
 
+    shared_groups_str = task_config.get("shared_groups", "")
+    shared_groups = []
+    if shared_groups_str:
+        # Split by comma, trim whitespace, and ignore empty strings
+        shared_groups = [g.strip() for g in shared_groups_str.split(",") if g.strip()]
+
     # Create a Timesketch API client.
     timesketch_api_client = timesketch_client.TimesketchApi(
         host_uri=timesketch_server_url,
@@ -240,7 +256,9 @@ def upload(
         )
 
     # Apply Access Controls to the sketch
-    sketch.add_to_acl(make_public=is_public, user_list=shared_users)
+    sketch.add_to_acl(
+        make_public=is_public, user_list=shared_users, group_list=shared_groups
+    )
 
     warnings = []
     uploaded_timelines = []
