@@ -106,7 +106,7 @@ def extract_files_task(
             continue
 
         logger.info(f"Processing image: {input_file_path}")
-        bd = BlockDevice(image_path=input_file_path)
+        bd = BlockDevice(image_path=input_file_path, min_partition_size=0)
 
         try:
             bd.setup()
@@ -126,24 +126,23 @@ def extract_files_task(
                     if os.path.exists(full_path) and os.path.isfile(full_path):
                         logger.info(f"Extracting {requested_path} from {mountpoint}")
 
-                        if os.path.exists(full_path) and os.path.isfile(full_path):
-                            output_file = create_output_file(
-                                output_path,
-                                display_name=os.path.basename(full_path),
-                                original_path=requested_path,
-                                data_type="extraction:file",
-                                source_file_id=input_file.get("id"),
+                        output_file = create_output_file(
+                            output_path,
+                            display_name=os.path.basename(full_path),
+                            original_path=requested_path,
+                            data_type="extraction:file",
+                            source_file_id=input_file.get("id"),
+                        )
+
+                        try:
+                            shutil.copy(full_path, output_file.path)
+                        except Exception as e:
+                            logger.error(
+                                f"Error copying file {full_path} to {output_file.path}: {e}"
                             )
+                            continue
 
-                            try:
-                                shutil.copy(full_path, output_file.path)
-                            except Exception as e:
-                                logger.error(
-                                    f"Error copying file {full_path} to {output_file.path}: {e}"
-                                )
-                                continue
-
-                            output_files.append(output_file.to_dict())
+                        output_files.append(output_file.to_dict())
 
         except Exception as e:
             logger.error(f"Error processing image {input_file_path}: {e}")
