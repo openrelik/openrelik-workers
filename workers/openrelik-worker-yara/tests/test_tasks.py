@@ -1,8 +1,9 @@
 import json
+import os
 import pytest
 import shutil
-from unittest.mock import MagicMock, patch
-from src.tasks import cleanup_fraken_output_log
+from unittest.mock import MagicMock, patch, mock_open
+from src.tasks import cleanup_fraken_output_log, command
 
 
 @pytest.fixture
@@ -96,3 +97,30 @@ def test_final_output_is_valid_json_array(mock_logfile):
     assert isinstance(data, list), "Output should be a JSON array (list)."
     assert len(data) == 2, "Should contain exactly two extracted entries."
     assert data[0]["ImagePath"].endswith("test_input.txt")
+
+
+def test_command_no_rules_provided():
+    """Test that RuntimeError is raised when no rules are provided in config or env."""
+    with patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(
+            RuntimeError,
+            match="At least one of Environment, Global or Manual Yara rules must be provided",
+        ):
+            command.run(None, task_config={}, input_files=[], output_path="/tmp")
+
+
+def test_command_empty_rules_collected():
+    """Test that ValueError is raised when rules are provided but none are successfully read."""
+    # Mock os.path.isfile and os.path.isdir to return False for everything
+    with patch("os.path.isfile", return_value=False), patch(
+        "os.path.isdir", return_value=False
+    ):
+
+        task_config = {"Global Yara rules": "/non/existent/path"}
+        with pytest.raises(ValueError, match="No Yara rules were collected"):
+            command.run(
+                None,
+                task_config=task_config,
+                input_files=[],
+                output_path="/tmp",
+            )

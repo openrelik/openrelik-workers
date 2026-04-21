@@ -24,7 +24,7 @@ openrelik-worker-yara:
   restart: always
   environment:
     - REDIS_URL=redis://openrelik-redis:6379
-    - YARA_RULES_FOLDER=/data/yara/
+    - OPENRELIK_YARA_RULES_FOLDER=/data/yara/
   volumes:
     - ./data:/usr/share/openrelik/data
     - /dev:/dev

@@ -1,6 +1,6 @@
 [project]
 name = "openrelik-worker-strings"
-version = "0.2.1"
+version = "0.3.0"
 description = "Extract strings from files"
 authors = [{ name = "Johan Berggren", email = "jberggren@gmail.com" }]
 requires-python = ">=3.11,<4"
@@ -9,7 +9,7 @@ license = "Apache 2.0"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
     "openrelik-worker-common>=0.17.1",
-    "openrelik-common>=0.7.3",
+    "openrelik-common>=0.7.7",
 ]
 
 [dependency-groups]

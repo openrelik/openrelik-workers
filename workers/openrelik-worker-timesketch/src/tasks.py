@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import time
 
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 from timesketch_api_client import client as timesketch_client
@@ -20,17 +21,37 @@ from timesketch_import_client import importer
 
 from .app import celery, redis_client
 
+# Hardcoded list of available Timesketch analyzers
+TIMESKETCH_ANALYZERS = [
+    "account_finder",
+    "browser_search",
+    "browser_timeframe",
+    "domain",
+    "feature_extraction",
+    "hashr_lookup",
+    "tagger",
+    "yetikeywords",
+    "yetibloomchecker",
+    "yetitriageindicators",
+    "yetibadnessindicators",
+    "yetilolbasindicators",
+    "yetiinvestigations",
+]
+
+MAX_INDEXING_RETRIES = 240
+POLL_INTERVAL_SECONDS = 5
+
 
 def get_or_create_sketch(
     timesketch_api_client,
     redis_client,
-    sketch_id=None,
-    sketch_name=None,
-    workflow_id=None,
+    sketch_id: int | str | None = None,
+    sketch_name: str | None = None,
+    workflow_id: str | None = None,
 ):
     """
     Retrieves or creates a sketch, handling locking if needed.
-    This uses Redis distrubuted lock to avoid race conditions.
+    This uses Redis distributed lock to avoid race conditions.
 
     Args:
         client: Timesketch API client.
@@ -45,7 +66,10 @@ def get_or_create_sketch(
     sketch = None
 
     if sketch_id:
-        sketch = timesketch_api_client.get_sketch(int(sketch_id))
+        try:
+            sketch = timesketch_api_client.get_sketch(int(sketch_id))
+        except ValueError:
+            raise ValueError(f"Sketch ID must be a number. Received: '{sketch_id}'")
     elif sketch_name:
         sketch = timesketch_api_client.create_sketch(sketch_name)
     else:
@@ -97,6 +121,45 @@ TASK_METADATA = {
             "type": "text",
             "required": False,
         },
+        {
+            "name": "analyzers",
+            "label": "Select Analyzers",
+            "description": "Select Timesketch Analyzers to run on the timeline after upload.",
+            "type": "autocomplete",
+            "items": TIMESKETCH_ANALYZERS,
+            "required": False,
+        },
+        {
+            "name": "shared_users",
+            "label": "Share with Timesketch users",
+            "description": (
+                "Comma-separated list of Timesketch usernames to share the "
+                "sketch with (e.g., admin,user1@example.com)."
+            ),
+            "type": "text",
+            "required": False,
+        },
+        {
+            "name": "shared_groups",
+            "label": "Share with Timesketch groups",
+            "description": (
+                "Comma-separated list of Timesketch groups to share the "
+                "sketch with (e.g., DF,SOC)."
+            ),
+            "type": "text",
+            "required": False,
+        },
+        {
+            "name": "make_private",
+            "label": "Set Sketch as Private",
+            "description": (
+                "By default, sketches are public so you can view them. "
+                "If you check this, ONLY the users specified in the shared "
+                "list above will have access."
+            ),
+            "type": "checkbox",
+            "required": False,
+        },
     ],
 }
 
@@ -123,9 +186,15 @@ def upload(
         Base64-encoded dictionary containing task results.
     """
     input_files = get_input_files(pipe_result, input_files or [])
+    task_config = task_config or {}
 
     # Connection details from environment variables.
     timesketch_server_url = os.environ.get("TIMESKETCH_SERVER_URL")
+    if not timesketch_server_url:
+        raise RuntimeError(
+            "TIMESKETCH_SERVER_URL environment variable is not set on the worker."
+        )
+
     timesketch_server_public_url = os.environ.get("TIMESKETCH_SERVER_PUBLIC_URL")
     timesketch_username = os.environ.get("TIMESKETCH_USERNAME")
     timesketch_password = os.environ.get("TIMESKETCH_PASSWORD")
@@ -133,7 +202,31 @@ def upload(
     # User supplied config.
     sketch_id = task_config.get("sketch_id")
     sketch_name = task_config.get("sketch_name")
-    sketch_identifier = {"sketch_id": sketch_id} if sketch_id else {"sketch_name": sketch_name}
+
+    # Analyzers config
+    selected_analyzers = task_config.get("analyzers", [])
+
+    # Extract Access Control Config safely
+    make_private = task_config.get("make_private", False)
+    if isinstance(make_private, str):
+        make_private = make_private.lower() in ["true", "1", "yes"]
+    else:
+        make_private = bool(make_private)
+
+    # Public Sketch is the default!
+    is_public = not make_private
+
+    shared_users_str = task_config.get("shared_users", "")
+    shared_users = []
+    if shared_users_str:
+        # Split by comma, trim whitespace, and ignore empty strings
+        shared_users = [u.strip() for u in shared_users_str.split(",") if u.strip()]
+
+    shared_groups_str = task_config.get("shared_groups", "")
+    shared_groups = []
+    if shared_groups_str:
+        # Split by comma, trim whitespace, and ignore empty strings
+        shared_groups = [g.strip() for g in shared_groups_str.split(",") if g.strip()]
 
     # Create a Timesketch API client.
     timesketch_api_client = timesketch_client.TimesketchApi(
@@ -142,33 +235,150 @@ def upload(
         password=timesketch_password,
     )
 
+    # UI Update: Initializing
+    self.send_event(
+        "task-progress",
+        data={"status": "Connecting to Timesketch API and configuring Sketch..."},
+    )
+
     # Get or create sketch using a distributed lock.
     sketch = get_or_create_sketch(
         timesketch_api_client,
         redis_client,
-        **sketch_identifier,
+        sketch_id=sketch_id,
+        sketch_name=sketch_name,
         workflow_id=workflow_id,
     )
 
     if not sketch:
-        raise Exception(f"Failed to create or retrieve sketch '{sketch_name}'")
+        raise Exception(
+            f"Failed to create or retrieve sketch '{sketch_name or sketch_id}'"
+        )
 
-    # Make the sketch public.
-    # TODO: Make this user configurable.
-    sketch.add_to_acl(make_public=True)
+    # Apply Access Controls to the sketch
+    sketch.add_to_acl(
+        make_public=is_public, user_list=shared_users, group_list=shared_groups
+    )
 
-    # Import each input file to it's own index.
-    for input_file in input_files:
+    warnings = []
+    uploaded_timelines = []
+    total_files = len(input_files)
+
+    # Import each input file to its own index.
+    for index, input_file in enumerate(input_files, start=1):
         input_file_path = input_file.get("path")
-        timeline_name = task_config.get("timeline_name") or input_file.get("display_name")
+        file_display_name = input_file.get("display_name")
+
+        # Prevent identical timeline names if multiple files are processed
+        base_name = task_config.get("timeline_name")
+        if base_name and total_files > 1:
+            timeline_name = f"{base_name} - {file_display_name}"
+        else:
+            timeline_name = base_name or file_display_name
+
+        timeline = None
+
+        # UI Update: Uploading
+        self.send_event(
+            "task-progress",
+            data={
+                "status": "Uploading file to Timesketch",
+                "progress": f"File {index} of {total_files}",
+                "current_file": file_display_name,
+                "timeline_name": timeline_name,
+            },
+        )
+
         with importer.ImportStreamer() as streamer:
             streamer.set_sketch(sketch)
             streamer.set_timeline_name(timeline_name)
             streamer.add_file(input_file_path)
 
+            # Grab the timeline object before context closes so we can query it later
+            timeline = streamer.timeline
+
+        # Append to our summary list
+        if timeline:
+            uploaded_timelines.append({"ID": timeline.id, "Name": timeline.name})
+
+        # If the user selected analyzers, we must wait for indexing to complete
+        if selected_analyzers and timeline:
+            max_retries = MAX_INDEXING_RETRIES
+            retry_count = 0
+
+            while retry_count < max_retries:
+                # Always fetch the latest status to display
+                current_status = timeline.status
+
+                # UI Update: Indexing
+                self.send_event(
+                    "task-progress",
+                    data={
+                        "status": "Waiting for Timesketch internal indexing to finish",
+                        "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
+                        "progress": f"File {index} of {total_files}",
+                        "current_file": file_display_name,
+                        "timesketch_status": current_status,
+                        "time_elapsed": f"{retry_count * POLL_INTERVAL_SECONDS}s (Timeout at {max_retries * POLL_INTERVAL_SECONDS}s)",
+                    },
+                )
+
+                if current_status in ["ready", "fail"]:
+                    break
+
+                retry_count += 1
+                time.sleep(POLL_INTERVAL_SECONDS)
+
+            # Once ready, trigger the analyzers
+            if timeline.status == "ready":
+                # UI Update: Triggering analyzers
+                self.send_event(
+                    "task-progress",
+                    data={
+                        "status": "Triggering Analyzers in Timesketch",
+                        "Sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
+                        "progress": f"File {index} of {total_files}",
+                        "current_file": file_display_name,
+                        "analyzers_queued": len(selected_analyzers),
+                    },
+                )
+
+                for analyzer in selected_analyzers:
+                    timeline.run_analyzer(analyzer)
+            elif timeline.status == "fail":
+                warnings.append(
+                    f"Analyzers for timeline '{timeline_name}' skipped because Timesketch failed to index the file."
+                )
+            else:
+                warnings.append(
+                    f"Analyzers for timeline '{timeline_name}' skipped because it was not ready within "
+                    f"{max_retries * POLL_INTERVAL_SECONDS} seconds!"
+                )
+
+    # Create the metadata dictionary
+    meta_result = {
+        "sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}",
+    }
+
+    # Flatten the uploaded timelines into a single, readable string
+    timelines_summary = ", ".join(
+        f'"{t["Name"]}" (ID: {t["ID"]})' for t in uploaded_timelines
+    )
+    if timelines_summary:
+        meta_result["uploaded_timelines"] = timelines_summary
+
+    # If any warnings occurred, append them so they appear in the UI
+    if warnings:
+        meta_result["warnings"] = " | ".join(warnings)
+
+    # UI Update: Finished
+    self.send_event(
+        "task-progress", data={"status": "Done! Finished exporting to Timesketch."}
+    )
+
     return create_task_result(
         output_files=[],
         workflow_id=workflow_id,
         command="Timesketch Importer Client",
-        meta={"sketch": f"{timesketch_server_public_url}/sketch/{sketch.id}"},
+        meta=meta_result,
     )

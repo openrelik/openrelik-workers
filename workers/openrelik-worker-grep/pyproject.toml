@@ -1,8 +1,8 @@
 [project]
 name = "openrelik-worker-grep"
-version = "2025.01.21"
+version = "0.2.0"
 description = "Grep for patterns in files"
-authors = [{ name = "Thomas" , email = "tomchop@google.com" }]
+authors = [{ name = "Thomas", email = "tomchop@google.com" }]
 requires-python = ">=3.12,<4"
 readme = "README.md"
 dependencies = [
@@ -12,11 +12,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-test = [
-    "pytest",
-    "pytest-cov>=5.0.0,<6",
-    "pytest-mock>=3.14.0,<4",
-]
+test = ["pytest", "pytest-cov>=5.0.0,<6", "pytest-mock>=3.14.0,<4"]
 
 [tool.uv]
 package = false

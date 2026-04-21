@@ -202,12 +202,15 @@ def command(
     mount_disk_images = task_config.get("mount_disk_images", False)
 
     # If the environment variable YARA_RULES_FOLDER is set, add it to the global Yara rules
-    env_yara = os.getenv("YARA_RULES_FOLDER", "")
+    env_yara = os.getenv("OPENRELIK_YARA_RULES_FOLDER", "")
     if env_yara:
         logger.info(
             f"Environment variable YARA_RULES_FOLDER provided, added {env_yara} to global Yara rules"
         )
-        global_yara += f"\n{env_yara}"
+        if not global_yara:
+            global_yara = f"{env_yara}"
+        else:
+            global_yara += f"\n{env_yara}"
 
     if not global_yara and not manual_yara and not env_yara:
         error_msg = (
