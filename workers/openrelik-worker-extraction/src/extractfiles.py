@@ -24,6 +24,12 @@ from openrelik_worker_common.task_utils import create_task_result, get_input_fil
 
 from .app import celery
 
+COMPATIBLE_INPUTS = {
+    "data_types": [],
+    "mime_types": [],
+    "filenames": ["*.img", "*.raw", "*.dd", "*.qcow3", "*.qcow2", "*.qcow"],
+}
+
 TASK_NAME = "openrelik-worker-extraction.tasks.extract_files"
 
 TASK_METADATA = {
@@ -77,7 +83,9 @@ def extract_files_task(
     log_root.bind(workflow_id=workflow_id)
     logger.info(f"Starting {TASK_NAME} for workflow {workflow_id}")
 
-    input_files = get_input_files(pipe_result, input_files or [])
+    input_files = get_input_files(
+        pipe_result, input_files or [], filter=COMPATIBLE_INPUTS
+    )
     output_files = []
 
     file_paths_str = task_config.get("file_paths", "")
