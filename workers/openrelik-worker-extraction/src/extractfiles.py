@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,10 +24,8 @@ from openrelik_worker_common.task_utils import create_task_result, get_input_fil
 
 from .app import celery
 
-# Task name used to register and route the task to the correct queue.
 TASK_NAME = "openrelik-worker-extraction.tasks.extract_files"
 
-# Task metadata for registration in the core system.
 TASK_METADATA = {
     "display_name": "Extract specific files from disk images",
     "description": "Mount a disk image and extract specific files provided as full paths.",
@@ -92,7 +90,6 @@ def extract_files_task(
             workflow_id=workflow_id,
         )
 
-    # Indicate task progress start.
     self.send_event("task-progress")
 
     telemetry.add_attribute_to_current_span("input_files", input_files)
