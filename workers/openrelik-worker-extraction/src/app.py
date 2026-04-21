@@ -30,8 +30,9 @@ celery = Celery(
     include=[
         "src.archives",
         "src.image_export",
+        "src.extractfiles",
     ],
-    worker_hijack_root_logger=False, # Disable Celery hijacking configured Python loggers.
+    worker_hijack_root_logger=False,  # Disable Celery hijacking configured Python loggers.
     worker_log_format="%(message)s",
     worker_task_log_format="%(message)s",
 )
