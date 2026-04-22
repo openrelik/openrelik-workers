@@ -30,7 +30,7 @@ COMPATIBLE_INPUTS = {
     "filenames": ["*.img", "*.raw", "*.dd", "*.qcow3", "*.qcow2", "*.qcow"],
 }
 
-TASK_NAME = "openrelik-worker-extraction.tasks.extract_full_path_files"
+TASK_NAME = "openrelik-worker-extraction.tasks.extract_files"
 
 TASK_METADATA = {
     "display_name": "Extract full path files from disk images",
