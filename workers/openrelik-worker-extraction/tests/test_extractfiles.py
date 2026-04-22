@@ -19,7 +19,7 @@ from src import extractfiles
 
 @pytest.fixture
 def mock_dependencies():
-    """Mocks dependencies for extract_files_task."""
+    """Mocks dependencies for extract_full_file_path_task."""
     with (
         patch("src.extractfiles.get_input_files") as mock_get_input_files,
         patch("src.extractfiles.create_output_file") as mock_create_output_file,
@@ -50,7 +50,7 @@ def mock_celery_task():
     return task
 
 
-def test_extract_files_task_success(mock_celery_task, mock_dependencies):
+def test_extract_full_file_path_task_success(mock_celery_task, mock_dependencies):
     """Test successful extraction of files."""
     mock_dependencies["get_input_files"].return_value = [
         {"id": "file1", "path": "/path/to/image.raw"}
@@ -69,7 +69,7 @@ def test_extract_files_task_success(mock_celery_task, mock_dependencies):
 
     mock_dependencies["create_task_result"].return_value = "serialized_result"
 
-    result = extractfiles.extract_files_task.__class__.run(
+    result = extractfiles.extract_full_file_path_task.__class__.run(
         mock_celery_task,
         pipe_result=None,
         input_files=[{"id": "file1"}],
@@ -92,14 +92,14 @@ def test_extract_files_task_success(mock_celery_task, mock_dependencies):
     mock_celery_task.send_event.assert_called_with("task-progress")
 
 
-def test_extract_files_task_no_file_paths(mock_celery_task, mock_dependencies):
+def test_extract_full_file_path_task_no_file_paths(mock_celery_task, mock_dependencies):
     """Test task with no file paths provided."""
     mock_dependencies["get_input_files"].return_value = [
         {"id": "file1", "path": "/path/to/image.raw"}
     ]
     mock_dependencies["create_task_result"].return_value = "empty_result"
 
-    result = extractfiles.extract_files_task.__class__.run(
+    result = extractfiles.extract_full_file_path_task.__class__.run(
         mock_celery_task, task_config={"file_paths": ""}, workflow_id="wf1"
     )
 
@@ -111,12 +111,14 @@ def test_extract_files_task_no_file_paths(mock_celery_task, mock_dependencies):
     mock_dependencies["block_device"].assert_not_called()
 
 
-def test_extract_files_task_no_input_files(mock_celery_task, mock_dependencies):
+def test_extract_full_file_path_task_no_input_files(
+    mock_celery_task, mock_dependencies
+):
     """Test task with no input files."""
     mock_dependencies["get_input_files"].return_value = []
     mock_dependencies["create_task_result"].return_value = "empty_result"
 
-    result = extractfiles.extract_files_task.__class__.run(
+    result = extractfiles.extract_full_file_path_task.__class__.run(
         mock_celery_task,
         input_files=[],
         task_config={"file_paths": "/some/path"},
@@ -128,7 +130,7 @@ def test_extract_files_task_no_input_files(mock_celery_task, mock_dependencies):
     assert mock_dependencies["create_task_result"].call_count == 1
 
 
-def test_extract_files_task_mount_failure(mock_celery_task, mock_dependencies):
+def test_extract_full_file_path_task_mount_failure(mock_celery_task, mock_dependencies):
     """Test task when mount returns no mountpoints."""
     mock_dependencies["get_input_files"].return_value = [
         {"id": "file1", "path": "/path/to/image.raw"}
@@ -139,7 +141,7 @@ def test_extract_files_task_mount_failure(mock_celery_task, mock_dependencies):
 
     mock_dependencies["create_task_result"].return_value = "result"
 
-    extractfiles.extract_files_task.__class__.run(
+    extractfiles.extract_full_file_path_task.__class__.run(
         mock_celery_task, task_config={"file_paths": "/path/to/file"}, workflow_id="wf1"
     )
 
@@ -148,7 +150,9 @@ def test_extract_files_task_mount_failure(mock_celery_task, mock_dependencies):
     mock_bd_instance.umount.assert_called_once()
 
 
-def test_extract_files_task_file_not_found(mock_celery_task, mock_dependencies):
+def test_extract_full_file_path_task_file_not_found(
+    mock_celery_task, mock_dependencies
+):
     """Test task when requested files are not found."""
     mock_dependencies["get_input_files"].return_value = [
         {"id": "file1", "path": "/path/to/image.raw"}
@@ -161,7 +165,7 @@ def test_extract_files_task_file_not_found(mock_celery_task, mock_dependencies):
 
     mock_dependencies["create_task_result"].return_value = "result"
 
-    extractfiles.extract_files_task.__class__.run(
+    extractfiles.extract_full_file_path_task.__class__.run(
         mock_celery_task, task_config={"file_paths": "/path/to/file"}, workflow_id="wf1"
     )
 
@@ -169,7 +173,7 @@ def test_extract_files_task_file_not_found(mock_celery_task, mock_dependencies):
     mock_bd_instance.umount.assert_called_once()
 
 
-def test_extract_files_task_copy_failure(mock_celery_task, mock_dependencies):
+def test_extract_full_file_path_task_copy_failure(mock_celery_task, mock_dependencies):
     """Test task when shutil.copy fails."""
     mock_dependencies["get_input_files"].return_value = [
         {"id": "file1", "path": "/path/to/image.raw"}
@@ -188,7 +192,7 @@ def test_extract_files_task_copy_failure(mock_celery_task, mock_dependencies):
 
     mock_dependencies["create_task_result"].return_value = "result"
 
-    extractfiles.extract_files_task.__class__.run(
+    extractfiles.extract_full_file_path_task.__class__.run(
         mock_celery_task, task_config={"file_paths": "/path/to/file"}, workflow_id="wf1"
     )
 
@@ -197,7 +201,9 @@ def test_extract_files_task_copy_failure(mock_celery_task, mock_dependencies):
     mock_bd_instance.umount.assert_called_once()
 
 
-def test_extract_files_task_setup_exception(mock_celery_task, mock_dependencies):
+def test_extract_full_file_path_task_setup_exception(
+    mock_celery_task, mock_dependencies
+):
     """Test task when BlockDevice.setup raises an exception."""
     mock_dependencies["get_input_files"].return_value = [
         {"id": "file1", "path": "/path/to/image.raw"}
@@ -208,7 +214,7 @@ def test_extract_files_task_setup_exception(mock_celery_task, mock_dependencies)
 
     mock_dependencies["create_task_result"].return_value = "result"
 
-    extractfiles.extract_files_task.__class__.run(
+    extractfiles.extract_full_file_path_task.__class__.run(
         mock_celery_task, task_config={"file_paths": "/path/to/file"}, workflow_id="wf1"
     )
 
@@ -217,7 +223,9 @@ def test_extract_files_task_setup_exception(mock_celery_task, mock_dependencies)
     mock_bd_instance.umount.assert_called_once()
 
 
-def test_extract_files_task_no_path_in_input(mock_celery_task, mock_dependencies):
+def test_extract_full_file_path_task_no_path_in_input(
+    mock_celery_task, mock_dependencies
+):
     """Test task when an input file has no path."""
     mock_dependencies["get_input_files"].return_value = [
         {"id": "file1"}  # No "path" key
@@ -225,7 +233,7 @@ def test_extract_files_task_no_path_in_input(mock_celery_task, mock_dependencies
 
     mock_dependencies["create_task_result"].return_value = "result"
 
-    extractfiles.extract_files_task.__class__.run(
+    extractfiles.extract_full_file_path_task.__class__.run(
         mock_celery_task, task_config={"file_paths": "/path/to/file"}, workflow_id="wf1"
     )
 
@@ -243,5 +251,7 @@ def test_on_task_prerun():
         mock_log_root.bind.assert_called_once_with(
             task_id="task_id",
             task_name="test_task",
-            worker_name=extractfiles.TASK_METADATA.get("display_name"),
+            worker_name=extractfiles.TASK_METADATA.get("task_config", {})[0].get(
+                "name"
+            ),
         )

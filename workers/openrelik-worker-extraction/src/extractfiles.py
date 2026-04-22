@@ -30,14 +30,14 @@ COMPATIBLE_INPUTS = {
     "filenames": ["*.img", "*.raw", "*.dd", "*.qcow3", "*.qcow2", "*.qcow"],
 }
 
-TASK_NAME = "openrelik-worker-extraction.tasks.extract_files"
+TASK_NAME = "openrelik-worker-extraction.tasks.extract_full_path_files"
 
 TASK_METADATA = {
-    "display_name": "Extract specific files from disk images",
+    "display_name": "Extract full path files from disk images",
     "description": "Mount a disk image and extract specific files provided as full paths.",
     "task_config": [
         {
-            "name": "file_paths",
+            "name": "extract_full_file_paths",
             "label": "Enter full file paths to extract (one per line)",
             "description": "Provide a multiline list of full file paths to extract from the disk image.",
             "type": "textarea",
@@ -55,12 +55,12 @@ def on_task_prerun(sender, task_id, task, args, kwargs, **_):
     log_root.bind(
         task_id=task_id,
         task_name=task.name,
-        worker_name=TASK_METADATA.get("display_name"),
+        worker_name=TASK_METADATA.get("task_config", {})[0].get("name"),
     )
 
 
 @celery.task(bind=True, name=TASK_NAME, metadata=TASK_METADATA)
-def extract_files_task(
+def extract_full_file_path_task(
     self,
     pipe_result: str = None,
     input_files: list = None,
@@ -68,7 +68,7 @@ def extract_files_task(
     workflow_id: str = None,
     task_config: dict = None,
 ) -> str:
-    """Mount disk images and extract specific files.
+    """Mount disk images and extract specific files by full path.
 
     Args:
         pipe_result: Base64-encoded result from the previous Celery task, if any.
@@ -110,8 +110,8 @@ def extract_files_task(
             logger.error("No path for the input file.")
             continue
 
-        logger.info(f"Processing image: {input_file_path}")
-        bd = BlockDevice(image_path=input_file_path, min_partition_size=0)
+        logger.info(f"Processing disk image: {input_file_path}")
+        bd = BlockDevice(image_path=input_file_path, min_partition_size=1)
 
         try:
             bd.setup()
@@ -122,8 +122,8 @@ def extract_files_task(
                 continue
 
             for requested_path in file_paths:
-                # requested_path might be absolute (e.g. /Windows/System32/config/SYSTEM)
-                # Ensure it's treated relative to mountpoint.
+                # requested_path might be absolute (e.g. /etc/ssh/sshd_config)
+                # Make sure it's parsed relative to mountpoint.
                 clean_path = requested_path.lstrip(os.path.sep)
 
                 for mountpoint in mountpoints:
@@ -148,9 +148,8 @@ def extract_files_task(
                             continue
 
                         output_files.append(output_file.to_dict())
-
         except Exception as e:
-            logger.error(f"Error processing image {input_file_path}: {e}")
+            logger.error(f"Error processing disk image {input_file_path}: {e}")
         finally:
             logger.info(f"Unmounting {input_file_path}")
             bd.umount()
