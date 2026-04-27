@@ -112,6 +112,7 @@ def test_extract_archive_task_success(mock_celery_task, mock_dependencies):
         "/tmp/output/extract.log",
         ["*.txt"],
         "pass",
+        True,
     )
     mock_dependencies["rename"].assert_called_once()
     mock_dependencies["rmtree"].assert_called_once_with("/tmp/export_dir")
@@ -184,3 +185,77 @@ def test_extract_archive_task_file_filter_list(mock_celery_task, mock_dependenci
     # Access the call args to verify file_filter list
     args, _ = mock_dependencies["extract_archive"].call_args
     assert args[3] == ["*.txt", "*.log"]
+
+
+def test_extract_archive_task_ignore_prompts_default(
+    mock_celery_task, mock_dependencies
+):
+    """Test that ignore_prompts defaults to True when not in task_config."""
+    mock_dependencies["get_input_files"].return_value = [
+        {"id": "file1", "display_name": "archive.zip"}
+    ]
+    mock_dependencies["create_output_file"].return_value = Mock(
+        path="/tmp/log", to_dict=lambda: {}
+    )
+    mock_dependencies["extract_archive"].return_value = ("cmd", "/tmp/export")
+    mock_dependencies["path"].return_value.glob.return_value = []
+    mock_dependencies["create_task_result"].return_value = "res"
+
+    archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        input_files=None,
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config={},
+    )
+
+    args, _ = mock_dependencies["extract_archive"].call_args
+    assert args[5] is True
+
+
+def test_extract_archive_task_ignore_prompts_true(mock_celery_task, mock_dependencies):
+    """Test that ignore_prompts is forwarded when explicitly set to True."""
+    mock_dependencies["get_input_files"].return_value = [
+        {"id": "file1", "display_name": "archive.zip"}
+    ]
+    mock_dependencies["create_output_file"].return_value = Mock(
+        path="/tmp/log", to_dict=lambda: {}
+    )
+    mock_dependencies["extract_archive"].return_value = ("cmd", "/tmp/export")
+    mock_dependencies["path"].return_value.glob.return_value = []
+    mock_dependencies["create_task_result"].return_value = "res"
+
+    archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        input_files=None,
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config={"ignore_prompts": True},
+    )
+
+    args, _ = mock_dependencies["extract_archive"].call_args
+    assert args[5] is True
+
+
+def test_extract_archive_task_ignore_prompts_false(mock_celery_task, mock_dependencies):
+    """Test that ignore_prompts is forwarded when explicitly set to False."""
+    mock_dependencies["get_input_files"].return_value = [
+        {"id": "file1", "display_name": "archive.zip"}
+    ]
+    mock_dependencies["create_output_file"].return_value = Mock(
+        path="/tmp/log", to_dict=lambda: {}
+    )
+    mock_dependencies["extract_archive"].return_value = ("cmd", "/tmp/export")
+    mock_dependencies["path"].return_value.glob.return_value = []
+    mock_dependencies["create_task_result"].return_value = "res"
+
+    archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        input_files=None,
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config={"ignore_prompts": False},
+    )
+
+    args, _ = mock_dependencies["extract_archive"].call_args
+    assert args[5] is False

@@ -48,6 +48,13 @@ TASK_METADATA = {
             "type": "text",
             "required": False,
         },
+        {
+            "name": "ignore_prompts",
+            "label": "Ignore prompts",
+            "description": "Whether to ignore prompts during archive extraction",
+            "type": "switch",
+            "required": False,
+        },
     ],
 }
 
@@ -95,6 +102,7 @@ def extract_archive_task(
     command_string = ""
     archive_password = task_config.get("archive_password", None)
     file_filters = task_config.get("file_filter") or []
+    ignore_prompts = task_config.get("ignore_prompts", True)
     if file_filters:
         file_filters = file_filters.split(",")
 
@@ -118,7 +126,12 @@ def extract_archive_task(
 
         try:
             (command_string, export_directory) = extract_archive(
-                input_file, output_path, log_file.path, file_filters, archive_password
+                input_file,
+                output_path,
+                log_file.path,
+                file_filters,
+                archive_password,
+                ignore_prompts,
             )
         except Exception as e:
             logger.error(f"extract_archive failed: {e}")
