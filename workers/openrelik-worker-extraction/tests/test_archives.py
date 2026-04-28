@@ -138,7 +138,11 @@ def test_extract_archive_task_no_input_files(mock_celery_task, mock_dependencies
 
     assert result == "empty_result"
     mock_dependencies["create_task_result"].assert_called_once_with(
-        output_files=[], task_files=[], workflow_id="wf1", command=""
+        output_files=[],
+        task_files=[],
+        workflow_id="wf1",
+        command="",
+        skip_file_creation=False,
     )
 
 
@@ -259,3 +263,41 @@ def test_extract_archive_task_ignore_prompts_false(mock_celery_task, mock_depend
 
     args, _ = mock_dependencies["extract_archive"].call_args
     assert args[5] is False
+
+
+def test_extract_archive_task_skip_file_creation_default(
+    mock_celery_task, mock_dependencies
+):
+    """skip_file_creation defaults to False when not present in task_config."""
+    mock_dependencies["get_input_files"].return_value = []
+    mock_dependencies["create_task_result"].return_value = "res"
+
+    archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        input_files=None,
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config={},
+    )
+
+    _, kwargs = mock_dependencies["create_task_result"].call_args
+    assert kwargs["skip_file_creation"] is False
+
+
+def test_extract_archive_task_skip_file_creation_true(
+    mock_celery_task, mock_dependencies
+):
+    """skip_file_creation=True in task_config is forwarded to create_task_result."""
+    mock_dependencies["get_input_files"].return_value = []
+    mock_dependencies["create_task_result"].return_value = "res"
+
+    archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        input_files=None,
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config={"skip_file_creation": True},
+    )
+
+    _, kwargs = mock_dependencies["create_task_result"].call_args
+    assert kwargs["skip_file_creation"] is True

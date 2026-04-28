@@ -55,6 +55,13 @@ TASK_METADATA = {
             "type": "switch",
             "required": False,
         },
+        {
+            "name": "skip_file_creation",
+            "label": "Skip creating DB entries for extracted files",
+            "description": "When enabled, extracted files are passed to downstream tasks but no per-file database entries are created. Use when extracting archives with many files.",
+            "type": "switch",
+            "required": False,
+        },
     ],
 }
 
@@ -103,6 +110,7 @@ def extract_archive_task(
     archive_password = task_config.get("archive_password", None)
     file_filters = task_config.get("file_filter") or []
     ignore_prompts = task_config.get("ignore_prompts", True)
+    skip_file_creation = task_config.get("skip_file_creation", False)
     if file_filters:
         file_filters = file_filters.split(",")
 
@@ -169,4 +177,5 @@ def extract_archive_task(
         task_files=task_files,
         workflow_id=workflow_id,
         command=command_string,
+        skip_file_creation=skip_file_creation,
     )
