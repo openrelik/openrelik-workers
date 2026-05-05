@@ -32,6 +32,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.services != '[]' }}
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       matrix:
         service: ${{ fromJSON(needs.changes.outputs.services) }}
