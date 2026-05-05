@@ -17,7 +17,7 @@ dependencies = [
 [dependency-groups]
 test = [
     "fakeredis>=2.32.0,<3",
-    "pytest>=7.4,<8",
+    "pytest>=9.0.3,<10",
     "pytest-cov",
     "freezegun",
 ]
