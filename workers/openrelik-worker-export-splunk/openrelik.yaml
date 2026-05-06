@@ -1,0 +1,12 @@
+# Showcase this worker on https://openrelik.org/marketplace
+publish: true
+
+# Worker Metadata. This section is required.
+display_name: Export to Splunk
+description: Export JSONL events to Splunk Cloud via the HTTP Event Collector (HEC).
+
+# Optional: Third-Party Tools Used by the Worker.
+tools:
+  - display_name: Splunk HEC
+    description: Splunk HTTP Event Collector
+    url: https://docs.splunk.com/Documentation/Splunk/latest/Data/UsetheHTTPEventCollector
