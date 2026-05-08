@@ -302,10 +302,10 @@ def test_extracted_files_register_in_db_by_default(mock_celery_task, mock_depend
     assert extracted_call.kwargs.get("register_in_db") is True
 
 
-def test_extracted_files_skip_db_when_switch_enabled(mock_celery_task, mock_dependencies):
-    """skip_file_creation=True flips every extracted file's register_in_db to False."""
+def test_extracted_files_skip_db_when_register_in_db_false(mock_celery_task, mock_dependencies):
+    """register_in_db=False in task_config propagates to each extracted file."""
     _run_task_with_one_extracted_file(
-        mock_celery_task, mock_dependencies, task_config={"skip_file_creation": True}
+        mock_celery_task, mock_dependencies, task_config={"register_in_db": False}
     )
 
     extracted_call = mock_dependencies["create_output_file"].call_args_list[1]

@@ -56,15 +56,16 @@ TASK_METADATA = {
             "required": False,
         },
         {
-            "name": "skip_file_creation",
-            "label": "Skip creating DB entries for extracted files",
+            "name": "register_in_db",
+            "label": "Register extracted files in the database",
             "description": (
-                "When enabled, extracted files are passed to downstream tasks "
-                "but not registered in the database or surfaced in the UI. "
-                "Use when extracting archives containing a very large number "
-                "of files where per-file DB bookkeeping is undesirable."
+                "When enabled (default), each extracted file gets a database "
+                "row and appears in the UI. Disable for archives with a very "
+                "large number of files where per-file DB bookkeeping is "
+                "undesirable — downstream tasks still receive the files."
             ),
             "type": "switch",
+            "value": True,
             "required": False,
         },
     ],
@@ -115,7 +116,7 @@ def extract_archive_task(
     archive_password = task_config.get("archive_password", None)
     file_filters = task_config.get("file_filter") or []
     ignore_prompts = task_config.get("ignore_prompts", True)
-    register_extracted_files = not task_config.get("skip_file_creation", False)
+    register_in_db = task_config.get("register_in_db", True)
     if file_filters:
         file_filters = file_filters.split(",")
 
@@ -167,7 +168,7 @@ def extract_archive_task(
                 original_path=original_path,
                 data_type="extraction:archive:file",
                 source_file_id=input_file.get("id"),
-                register_in_db=register_extracted_files,
+                register_in_db=register_in_db,
             )
             os.rename(file.absolute(), output_file.path)
             output_files.append(output_file.to_dict())
