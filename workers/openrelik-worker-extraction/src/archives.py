@@ -59,10 +59,7 @@ TASK_METADATA = {
             "name": "register_in_db",
             "label": "Register extracted files in the database",
             "description": (
-                "When enabled (default), each extracted file gets a database "
-                "row and appears in the UI. Disable for archives with a very "
-                "large number of files where per-file DB bookkeeping is "
-                "undesirable — downstream tasks still receive the files."
+                "When enabled (default), each extracted file is registered and appear sin the UI."
             ),
             "type": "switch",
             "value": True,
