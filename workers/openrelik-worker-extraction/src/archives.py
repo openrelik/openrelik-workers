@@ -55,6 +55,16 @@ TASK_METADATA = {
             "type": "switch",
             "required": False,
         },
+        {
+            "name": "register_in_db",
+            "label": "Register extracted files in the database",
+            "description": (
+                "When enabled (default), each extracted file is registered and appear sin the UI."
+            ),
+            "type": "switch",
+            "value": True,
+            "required": False,
+        },
     ],
 }
 
@@ -103,6 +113,7 @@ def extract_archive_task(
     archive_password = task_config.get("archive_password", None)
     file_filters = task_config.get("file_filter") or []
     ignore_prompts = task_config.get("ignore_prompts", True)
+    register_in_db = task_config.get("register_in_db", True)
     if file_filters:
         file_filters = file_filters.split(",")
 
@@ -154,6 +165,7 @@ def extract_archive_task(
                 original_path=original_path,
                 data_type="extraction:archive:file",
                 source_file_id=input_file.get("id"),
+                register_in_db=register_in_db,
             )
             os.rename(file.absolute(), output_file.path)
             output_files.append(output_file.to_dict())
