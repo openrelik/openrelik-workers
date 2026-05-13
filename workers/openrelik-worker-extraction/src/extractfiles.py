@@ -153,7 +153,9 @@ def extract_full_file_path_task(
                         )
 
                         try:
-                            shutil.copy(full_path, output_file.path)
+                            shutil.copy(
+                                full_path, output_file.path, follow_symlinks=False
+                            )
                         except Exception as e:
                             logger.error(
                                 f"Error copying file {full_path} to {output_file.path}: {e}"
