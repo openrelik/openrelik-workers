@@ -156,13 +156,13 @@ def extract_full_file_path_task(
                             shutil.copy(
                                 full_path, output_file.path, follow_symlinks=False
                             )
+                            output_files.append(output_file.to_dict())
                         except Exception as e:
                             logger.error(
                                 f"Error copying file {full_path} to {output_file.path}: {e}"
                             )
                             continue
 
-                        output_files.append(output_file.to_dict())
         except Exception as e:
             logger.error(f"Error processing disk image {input_file_path}: {e}")
         finally:
