@@ -127,7 +127,20 @@ def extract_full_file_path_task(
                 clean_path = requested_path.lstrip(os.path.sep)
 
                 for mountpoint in mountpoints:
-                    full_path = os.path.join(mountpoint, clean_path)
+                    # Verify path and make sure no path traversal is possible. The requested path must be within the mountpoint.
+                    full_path = os.path.abspath(os.path.join(mountpoint, clean_path))
+                    mountpoint_abs = os.path.abspath(mountpoint)
+                    if (
+                        os.path.commonpath([mountpoint_abs, full_path])
+                        != mountpoint_abs
+                    ):
+                        logger.error(
+                            f"Path traversal attempt detected: {requested_path}"
+                        )
+                        raise RuntimeError(
+                            f"Path traversal attempt detected: {requested_path}"
+                        )
+
                     if os.path.exists(full_path) and os.path.isfile(full_path):
                         logger.info(f"Extracting {requested_path} from {mountpoint}")
 
