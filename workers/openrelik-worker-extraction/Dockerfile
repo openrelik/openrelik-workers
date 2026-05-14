@@ -9,12 +9,14 @@ RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selectio
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     software-properties-common \
-    python3-pip \
-    python3-poetry \
     p7zip-full \
     gpg-agent \
     wget \
     tzdata \
+    fdisk \
+    sudo \
+    qemu-utils \
+    ntfs-3g \
   && rm -rf /var/lib/apt/lists/*
 
 # Choose which Plaso version to use, default is stable
