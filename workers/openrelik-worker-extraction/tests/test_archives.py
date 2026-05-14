@@ -259,3 +259,54 @@ def test_extract_archive_task_ignore_prompts_false(mock_celery_task, mock_depend
 
     args, _ = mock_dependencies["extract_archive"].call_args
     assert args[5] is False
+
+
+def _run_task_with_one_extracted_file(mock_celery_task, mock_dependencies, task_config):
+    """Helper: run extract_archive_task with one input + one extracted file."""
+    mock_dependencies["get_input_files"].return_value = [
+        {"id": "file1", "display_name": "archive.zip", "path": "/p/archive.zip"}
+    ]
+    mock_log_file = Mock(
+        path="/tmp/log", to_dict=lambda: {"id": "log1"}
+    )
+    mock_output_file = Mock(
+        path="/tmp/extracted", to_dict=lambda: {"id": "f2"}
+    )
+    mock_dependencies["create_output_file"].side_effect = [mock_log_file, mock_output_file]
+    mock_dependencies["extract_archive"].return_value = ("cmd", "/tmp/export")
+
+    mock_extracted = Mock()
+    mock_extracted.is_file.return_value = True
+    mock_extracted.name = "extracted.txt"
+    mock_extracted.relative_to.return_value = "extracted.txt"
+    mock_extracted.absolute.return_value = "/tmp/export/extracted.txt"
+    mock_dependencies["path"].return_value.glob.return_value = [mock_extracted]
+
+    mock_dependencies["create_task_result"].return_value = "res"
+
+    archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        input_files=None,
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config=task_config,
+    )
+
+
+def test_extracted_files_register_in_db_by_default(mock_celery_task, mock_dependencies):
+    """Without the skip switch, extracted files opt in to DB registration."""
+    _run_task_with_one_extracted_file(mock_celery_task, mock_dependencies, task_config={})
+
+    # call_args_list: [0] is the log file, [1] is the extracted file.
+    extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
+    assert extracted_call.kwargs.get("register_in_db") is True
+
+
+def test_extracted_files_skip_db_when_register_in_db_false(mock_celery_task, mock_dependencies):
+    """register_in_db=False in task_config propagates to each extracted file."""
+    _run_task_with_one_extracted_file(
+        mock_celery_task, mock_dependencies, task_config={"register_in_db": False}
+    )
+
+    extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
+    assert extracted_call.kwargs.get("register_in_db") is False
