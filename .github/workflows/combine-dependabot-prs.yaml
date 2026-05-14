@@ -2,11 +2,17 @@ name: Combine Dependabot PRs
 on:
   workflow_dispatch: # Allows manual triggering
 
+# The minimum permissions required to run this Action
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  
 jobs:
   combine-prs:
     runs-on: ubuntu-latest
     steps:
       - name: Combine Dependabot PRs
-        uses: github/combine-prs@v5
+        uses: github/combine-prs@v5.2.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
