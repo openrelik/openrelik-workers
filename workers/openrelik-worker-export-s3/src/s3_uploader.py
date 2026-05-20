@@ -16,7 +16,6 @@ import gzip
 import logging
 import os
 import shutil
-import tarfile
 import tempfile
 import time
 from typing import Callable, Optional
@@ -52,32 +51,6 @@ def compress_gzip(src_path: str) -> str:
     return tmp_path
 
 
-def compress_tar_gz(input_files: list[dict]) -> str:
-    """Bundle every input file's path into a single .tar.gz tempfile.
-
-    Each entry's archive name is its ``display_name`` (or the basename of its
-    on-disk path if ``display_name`` is missing) so the archive contains
-    user-meaningful filenames rather than OpenRelik UUID-based on-disk names.
-
-    The caller owns the returned path and must delete it.
-    """
-    fd, tmp_path = tempfile.mkstemp(suffix=".tar.gz", prefix="openrelik-s3-")
-    os.close(fd)
-    try:
-        with tarfile.open(tmp_path, "w:gz", compresslevel=_GZIP_LEVEL) as tar:
-            for f in input_files:
-                src = f["path"]
-                arcname = f.get("display_name") or os.path.basename(src)
-                tar.add(src, arcname=arcname)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            logger.exception("Failed to remove temp file %s after tar.gz error", tmp_path)
-        raise
-    return tmp_path
-
-
 class _UploadProgress:
     """boto3 upload_file Callback that throttles progress updates.
 
@@ -90,7 +63,7 @@ class _UploadProgress:
         self,
         total_bytes: int,
         on_update: Callable[[int, int], None],
-        min_interval_s: float = 1.0,
+        min_interval_s: float = 5.0,
     ):
         self._total = total_bytes
         self._sent = 0

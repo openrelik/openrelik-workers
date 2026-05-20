@@ -16,10 +16,8 @@
 
 import base64
 import gzip
-import io
 import json
 import os
-import tarfile
 
 import boto3
 import pytest
@@ -89,32 +87,6 @@ def test_upload_gzip_appends_gz_suffix(tmp_path):
     s3 = boto3.client("s3", region_name="us-east-1")
     body = s3.get_object(Bucket="test-bucket", Key="log.json.gz")["Body"].read()
     assert gzip.decompress(body) == b'{"a": 1}\n'
-
-
-@mock_aws
-def test_upload_tar_gz_bundles(tmp_path):
-    _create_bucket()
-    inputs = [
-        _make_input(tmp_path, "a.bin", b"alpha"),
-        _make_input(tmp_path, "b.bin", b"beta"),
-    ]
-
-    raw = tasks.upload(
-        input_files=inputs,
-        workflow_id="wf-3",
-        task_config={"s3_bucket": "test-bucket", "s3_prefix": "case/2", "compression": "tar.gz"},
-    )
-
-    result = _decode(raw)
-    assert result["meta"]["uploaded_count"] == 1
-    assert result["meta"]["uploaded_objects"][0]["key"] == "case/2/wf-3.tar.gz"
-    assert sorted(result["meta"]["uploaded_objects"][0]["bundled_files"]) == ["a.bin", "b.bin"]
-
-    s3 = boto3.client("s3", region_name="us-east-1")
-    body = s3.get_object(Bucket="test-bucket", Key="case/2/wf-3.tar.gz")["Body"].read()
-    with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as tar:
-        assert sorted(tar.getnames()) == ["a.bin", "b.bin"]
-        assert tar.extractfile("a.bin").read() == b"alpha"
 
 
 @mock_aws

@@ -2,8 +2,7 @@
 
 Exports input files from OpenRelik workflows to Amazon S3 (or any S3-compatible
 endpoint such as MinIO, Cloudflare R2, or DigitalOcean Spaces). Optionally
-gzips each file or bundles all inputs into a single tar.gz archive before
-upload.
+gzips each file before upload.
 
 ## Configuration
 
@@ -32,8 +31,6 @@ Per-run options are set via `task_config`:
 - `compression` — one of:
   - `none` (default) — upload each file as-is
   - `gzip` — gzip each file individually, uploaded as `<display_name>.gz`
-  - `tar.gz` — bundle all inputs into a single
-    `<workflow_id>.tar.gz` archive and upload that
 
 Note: `s3_prefix` and per-file display names are sanitized — leading/trailing
 slashes, `..`, `.`, and NUL bytes are stripped to prevent S3 key injection
@@ -42,8 +39,7 @@ and prefix escape.
 ## Input
 
 Accepts any input files. Per-file uploads use the file's `display_name` as
-the S3 object name. The `tar.gz` mode preserves each entry's `display_name`
-inside the archive.
+the S3 object name.
 
 ## Output
 
@@ -52,7 +48,7 @@ artifact. The task result `meta` includes:
 
 - `bucket`, `prefix`, `compression`, `endpoint_url`
 - `uploaded_count`, `uploaded_bytes`
-- `uploaded_objects` — list of `{display_name, key, size, [bundled_files]}`
+- `uploaded_objects` — list of `{display_name, key, size}`
 - `failed_count`, `failed_objects` — populated on partial failure
 
 On partial failure (some files uploaded, others did not) the task continues

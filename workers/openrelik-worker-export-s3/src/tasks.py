@@ -21,17 +21,17 @@ from botocore.exceptions import BotoCoreError, ClientError
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 
 from .app import celery
-from .s3_uploader import compress_gzip, compress_tar_gz, upload_file
+from .s3_uploader import compress_gzip, upload_file
 
 logger = logging.getLogger(__name__)
 
 TASK_NAME = "openrelik-worker-export-s3.tasks.upload"
 
-VALID_COMPRESSION = ("none", "gzip", "tar.gz")
+VALID_COMPRESSION = ("none", "gzip")
 
 TASK_METADATA = {
     "display_name": "Export to S3",
-    "description": "Export input files to Amazon S3 with optional gzip or tar.gz compression.",
+    "description": "Export input files to Amazon S3 with optional gzip compression.",
     "task_config": [
         {
             "name": "s3_bucket",
@@ -56,8 +56,7 @@ TASK_METADATA = {
             "label": "Compression",
             "description": (
                 "'none' uploads files as-is. 'gzip' gzips each file individually "
-                "with a .gz suffix. 'tar.gz' bundles all input files into a "
-                "single <workflow_id>.tar.gz archive."
+                "with a .gz suffix."
             ),
             "type": "select",
             "items": list(VALID_COMPRESSION),
@@ -172,80 +171,51 @@ def upload(
     uploaded: list[dict] = []
     failed: list[dict] = []
 
-    if compression == "tar.gz":
-        archive_name = f"{workflow_id or 'openrelik'}.tar.gz"
+    for i, input_file in enumerate(input_files, start=1):
+        display_name = input_file.get("display_name") or os.path.basename(
+            input_file["path"]
+        )
+        safe_name = _safe_key_segment(display_name)
+        if not safe_name:
+            failed.append(
+                {"display_name": display_name, "error": "empty/invalid display_name"}
+            )
+            continue
+
         self.send_event(
             "task-progress",
-            data={"status": "Building tar.gz archive", "files": total_files},
+            data={
+                "status": "Uploading to S3",
+                "progress": f"File {i} of {total_files}",
+                "current_file": display_name,
+                "bucket": bucket,
+            },
         )
-        archive_path = compress_tar_gz(input_files)
-        key = _make_key(archive_name)
+
+        cleanup_path = None
+        if compression == "gzip":
+            local_path = compress_gzip(input_file["path"])
+            cleanup_path = local_path
+            key_name = f"{safe_name}.gz"
+        else:
+            local_path = input_file["path"]
+            key_name = safe_name
+        key = _make_key(key_name)
+
         try:
-            on_progress = _make_progress_cb(self, archive_name, 1, 1, bucket)
-            size = upload_file(s3, archive_path, bucket, key, on_progress=on_progress)
+            on_progress = _make_progress_cb(self, display_name, i, total_files, bucket)
+            size = upload_file(s3, local_path, bucket, key, on_progress=on_progress)
+            uploaded.append({"display_name": display_name, "key": key, "size": size})
         except (ClientError, BotoCoreError) as exc:
-            raise RuntimeError(
-                f"S3 upload failed for archive -> s3://{bucket}/{key}: {exc}"
-            ) from exc
+            logger.exception(
+                "S3 upload failed for %s -> s3://%s/%s", display_name, bucket, key
+            )
+            failed.append(
+                {"display_name": display_name, "key": key, "error": str(exc)}
+            )
         finally:
-            _unlink_quiet(archive_path)
-        uploaded.append(
-            {
-                "display_name": archive_name,
-                "key": key,
-                "size": size,
-                "bundled_files": [
-                    f.get("display_name") or os.path.basename(f["path"])
-                    for f in input_files
-                ],
-            }
-        )
-    else:
-        for i, input_file in enumerate(input_files, start=1):
-            display_name = input_file.get("display_name") or os.path.basename(
-                input_file["path"]
-            )
-            safe_name = _safe_key_segment(display_name)
-            if not safe_name:
-                failed.append(
-                    {"display_name": display_name, "error": "empty/invalid display_name"}
-                )
-                continue
-
-            self.send_event(
-                "task-progress",
-                data={
-                    "status": "Uploading to S3",
-                    "progress": f"File {i} of {total_files}",
-                    "current_file": display_name,
-                    "bucket": bucket,
-                },
-            )
-
-            cleanup_path = None
-            if compression == "gzip":
-                local_path = compress_gzip(input_file["path"])
-                cleanup_path = local_path
-                key_name = f"{safe_name}.gz"
-            else:
-                local_path = input_file["path"]
-                key_name = safe_name
-            key = _make_key(key_name)
-
-            try:
-                on_progress = _make_progress_cb(self, display_name, i, total_files, bucket)
-                size = upload_file(s3, local_path, bucket, key, on_progress=on_progress)
-                uploaded.append({"display_name": display_name, "key": key, "size": size})
-            except (ClientError, BotoCoreError) as exc:
-                logger.exception(
-                    "S3 upload failed for %s -> s3://%s/%s", display_name, bucket, key
-                )
-                failed.append(
-                    {"display_name": display_name, "key": key, "error": str(exc)}
-                )
-            finally:
-                if cleanup_path:
-                    _unlink_quiet(cleanup_path)
+            if cleanup_path:
+                _unlink_quiet(cleanup_path)
 
     total_bytes = sum(u["size"] for u in uploaded)
     self.send_event(

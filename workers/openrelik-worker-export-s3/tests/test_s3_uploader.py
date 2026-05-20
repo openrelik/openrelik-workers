@@ -16,7 +16,6 @@
 
 import gzip
 import os
-import tarfile
 
 import boto3
 import pytest
@@ -63,37 +62,6 @@ def test_compress_gzip_cleanup_on_error(tmp_path, monkeypatch):
     with pytest.raises(OSError, match="boom"):
         s3_uploader.compress_gzip(src)
     assert not os.path.exists(captured["path"])
-
-
-def test_compress_tar_gz_uses_display_name(tmp_path):
-    a = _write(str(tmp_path / "a-uuid"), b"alpha")
-    b = _write(str(tmp_path / "b-uuid"), b"beta")
-    inputs = [
-        {"path": a, "display_name": "alpha.txt"},
-        {"path": b, "display_name": "nested/beta.txt"},
-    ]
-    archive = s3_uploader.compress_tar_gz(inputs)
-    try:
-        with tarfile.open(archive, "r:gz") as tar:
-            names = sorted(tar.getnames())
-            assert names == ["alpha.txt", "nested/beta.txt"]
-            alpha = tar.extractfile("alpha.txt").read()
-            beta = tar.extractfile("nested/beta.txt").read()
-            assert alpha == b"alpha"
-            assert beta == b"beta"
-    finally:
-        os.unlink(archive)
-
-
-def test_compress_tar_gz_falls_back_to_basename(tmp_path):
-    """If display_name is missing, the path basename is used."""
-    src = _write(str(tmp_path / "evidence.bin"), b"data")
-    archive = s3_uploader.compress_tar_gz([{"path": src}])
-    try:
-        with tarfile.open(archive, "r:gz") as tar:
-            assert tar.getnames() == ["evidence.bin"]
-    finally:
-        os.unlink(archive)
 
 
 @mock_aws
