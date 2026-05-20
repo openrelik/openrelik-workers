@@ -31,11 +31,21 @@ def _decode(result: str) -> dict:
     return json.loads(base64.b64decode(result.encode("utf-8")).decode("utf-8"))
 
 
-def _make_input(tmp_path, name: str, body: bytes, display_name: str = None) -> dict:
+def _make_input(
+    tmp_path,
+    name: str,
+    body: bytes,
+    display_name: str = None,
+    original_path: str = None,
+) -> dict:
     path = str(tmp_path / name)
     with open(path, "wb") as f:
         f.write(body)
-    return {"path": path, "display_name": display_name or name}
+    return {
+        "path": path,
+        "display_name": display_name or name,
+        "original_path": original_path,
+    }
 
 
 def _create_bucket(name: str = "test-bucket") -> None:
@@ -87,6 +97,34 @@ def test_upload_gzip_appends_gz_suffix(tmp_path):
     s3 = boto3.client("s3", region_name="us-east-1")
     body = s3.get_object(Bucket="test-bucket", Key="log.json.gz")["Body"].read()
     assert gzip.decompress(body) == b'{"a": 1}\n'
+
+
+@mock_aws
+def test_upload_gzip_uses_original_path_basename(tmp_path):
+    """When original_path is set, the S3 key should be its basename + .gz —
+    not the (possibly mangled) intermediate display_name."""
+    _create_bucket()
+    inputs = [
+        _make_input(
+            tmp_path,
+            "abc123.plaso",
+            b"derived",
+            display_name="abc123.plaso",
+            original_path="/uploads/2026/evidence.E01",
+        )
+    ]
+
+    raw = tasks.upload(
+        input_files=inputs,
+        workflow_id="wf-orig",
+        task_config={"s3_bucket": "test-bucket", "compression": "gzip"},
+    )
+    result = _decode(raw)
+    assert result["meta"]["uploaded_objects"][0]["key"] == "evidence.E01.gz"
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    keys = [o["Key"] for o in s3.list_objects_v2(Bucket="test-bucket").get("Contents", [])]
+    assert keys == ["evidence.E01.gz"]
 
 
 @mock_aws
@@ -172,12 +210,12 @@ def test_upload_partial_failure_continues_and_raises(tmp_path, monkeypatch):
 
     real_upload = s3_uploader.upload_file
 
-    def flaky(client, local_path, bucket, key, on_progress=None):
+    def flaky(client, local_path, bucket, key):
         if "bad.bin" in key:
             raise ClientError(
                 {"Error": {"Code": "AccessDenied", "Message": "nope"}}, "PutObject"
             )
-        return real_upload(client, local_path, bucket, key, on_progress=on_progress)
+        return real_upload(client, local_path, bucket, key)
 
     monkeypatch.setattr("src.tasks.upload_file", flaky)
 
@@ -195,9 +233,11 @@ def test_upload_partial_failure_continues_and_raises(tmp_path, monkeypatch):
 
 
 @mock_aws
-def test_upload_progress_events_fired(tmp_path, monkeypatch):
+def test_upload_emits_per_file_and_done_events(tmp_path, monkeypatch):
+    """Per-file 'Uploading' event and a final 'Done' event are emitted from
+    the main task thread (no boto3-thread callbacks)."""
     _create_bucket()
-    inputs = [_make_input(tmp_path, "blob.bin", b"x" * (5 * 1024 * 1024))]
+    inputs = [_make_input(tmp_path, "blob.bin", b"x" * 1024)]
 
     events: list[dict] = []
     monkeypatch.setattr(
@@ -211,7 +251,6 @@ def test_upload_progress_events_fired(tmp_path, monkeypatch):
         task_config={"s3_bucket": "test-bucket"},
     )
 
-    progress_events = [e for e in events if "bytes_sent" in e]
-    assert progress_events, "expected at least one upload progress event"
-    last = progress_events[-1]
-    assert last["bytes_sent"] == last["bytes_total"]
+    statuses = [e.get("status") for e in events]
+    assert "Uploading to S3" in statuses
+    assert statuses[-1] == "Done"

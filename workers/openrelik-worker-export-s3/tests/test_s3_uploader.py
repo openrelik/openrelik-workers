@@ -65,33 +65,21 @@ def test_compress_gzip_cleanup_on_error(tmp_path, monkeypatch):
 
 
 @mock_aws
-def test_upload_file_returns_size_and_invokes_callback(tmp_path):
+def test_upload_file_returns_size(tmp_path):
     s3 = boto3.client("s3", region_name="us-east-1")
     s3.create_bucket(Bucket="test-bucket")
 
     payload = b"x" * (5 * 1024 * 1024)  # 5 MiB triggers boto3's chunked path
     src = _write(str(tmp_path / "blob.bin"), payload)
 
-    seen: list[tuple[int, int]] = []
-
-    def on_progress(sent: int, total: int) -> None:
-        seen.append((sent, total))
-
-    size = s3_uploader.upload_file(
-        s3, src, "test-bucket", "blob.bin", on_progress=on_progress
-    )
+    size = s3_uploader.upload_file(s3, src, "test-bucket", "blob.bin")
     assert size == len(payload)
-    assert seen, "expected at least one progress callback"
-    final_sent, final_total = seen[-1]
-    assert final_sent == final_total == len(payload)
-
-    # And the object actually exists in mocked S3.
     body = s3.get_object(Bucket="test-bucket", Key="blob.bin")["Body"].read()
     assert body == payload
 
 
 @mock_aws
-def test_upload_file_works_without_callback(tmp_path):
+def test_upload_file_small(tmp_path):
     s3 = boto3.client("s3", region_name="us-east-1")
     s3.create_bucket(Bucket="test-bucket")
     src = _write(str(tmp_path / "tiny.bin"), b"hi")
@@ -100,26 +88,3 @@ def test_upload_file_works_without_callback(tmp_path):
     assert size == 2
     body = s3.get_object(Bucket="test-bucket", Key="tiny.bin")["Body"].read()
     assert body == b"hi"
-
-
-def test_upload_progress_throttles_and_emits_final():
-    """`_UploadProgress` should always emit the final (sent==total) update."""
-    seen: list[tuple[int, int]] = []
-    cb = s3_uploader._UploadProgress(
-        total_bytes=300, on_update=lambda s, t: seen.append((s, t)), min_interval_s=10.0
-    )
-    # Three chunks; first two are throttled, last completes the upload.
-    cb(100)
-    cb(100)
-    cb(100)
-    assert seen[-1] == (300, 300)
-
-
-def test_upload_progress_swallows_callback_exception():
-    """A buggy on_progress must not abort the upload."""
-
-    def boom(_s, _t):
-        raise RuntimeError("ui crashed")
-
-    cb = s3_uploader._UploadProgress(total_bytes=10, on_update=boom, min_interval_s=0.0)
-    cb(10)  # would propagate if not swallowed

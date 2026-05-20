@@ -17,8 +17,6 @@ import logging
 import os
 import shutil
 import tempfile
-import time
-from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -51,51 +49,12 @@ def compress_gzip(src_path: str) -> str:
     return tmp_path
 
 
-class _UploadProgress:
-    """boto3 upload_file Callback that throttles progress updates.
-
-    boto3 invokes this every chunk (~8 KiB by default) — far too frequent to
-    forward verbatim to Celery. We coalesce into one update per
-    ``min_interval_s`` seconds, with a guaranteed final update on completion.
-    """
-
-    def __init__(
-        self,
-        total_bytes: int,
-        on_update: Callable[[int, int], None],
-        min_interval_s: float = 5.0,
-    ):
-        self._total = total_bytes
-        self._sent = 0
-        self._last_emit = 0.0
-        self._min_interval = min_interval_s
-        self._on_update = on_update
-
-    def __call__(self, chunk_bytes: int) -> None:
-        self._sent += chunk_bytes
-        now = time.monotonic()
-        if self._sent >= self._total or (now - self._last_emit) >= self._min_interval:
-            self._last_emit = now
-            try:
-                self._on_update(self._sent, self._total)
-            except Exception:
-                logger.exception("on_progress callback raised; ignoring")
-
-
-def upload_file(
-    s3_client,
-    local_path: str,
-    bucket: str,
-    key: str,
-    on_progress: Optional[Callable[[int, int], None]] = None,
-) -> int:
+def upload_file(s3_client, local_path: str, bucket: str, key: str) -> int:
     """Upload ``local_path`` to ``s3://bucket/key`` and return bytes uploaded.
 
-    boto3's ``upload_file`` already handles multipart streaming for large
-    files. If ``on_progress`` is provided, it is called periodically with
-    ``(bytes_sent, bytes_total)``.
+    boto3's ``upload_file`` handles multipart streaming for large files
+    transparently.
     """
     size = os.path.getsize(local_path)
-    callback = _UploadProgress(size, on_progress) if on_progress else None
-    s3_client.upload_file(local_path, bucket, key, Callback=callback)
+    s3_client.upload_file(local_path, bucket, key)
     return size
