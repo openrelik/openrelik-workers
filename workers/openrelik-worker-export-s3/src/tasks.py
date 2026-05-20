@@ -1,0 +1,288 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import json
+import logging
+import os
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+from openrelik_worker_common.task_utils import create_task_result, get_input_files
+
+from .app import celery
+from .s3_uploader import compress_gzip, compress_tar_gz, upload_file
+
+logger = logging.getLogger(__name__)
+
+TASK_NAME = "openrelik-worker-export-s3.tasks.upload"
+
+VALID_COMPRESSION = ("none", "gzip", "tar.gz")
+
+TASK_METADATA = {
+    "display_name": "Export to S3",
+    "description": "Export input files to Amazon S3 with optional gzip or tar.gz compression.",
+    "task_config": [
+        {
+            "name": "s3_bucket",
+            "label": "S3 bucket",
+            "description": "Destination S3 bucket name (without the s3:// prefix).",
+            "type": "text",
+            "required": True,
+        },
+        {
+            "name": "s3_prefix",
+            "label": "S3 key prefix",
+            "description": (
+                "Optional key prefix (folder). Leading and trailing slashes "
+                "are stripped, and '..' / '.' path components are dropped. "
+                "Example: 'forensics/case-123'."
+            ),
+            "type": "text",
+            "required": False,
+        },
+        {
+            "name": "compression",
+            "label": "Compression",
+            "description": (
+                "'none' uploads files as-is. 'gzip' gzips each file individually "
+                "with a .gz suffix. 'tar.gz' bundles all input files into a "
+                "single <workflow_id>.tar.gz archive."
+            ),
+            "type": "select",
+            "items": list(VALID_COMPRESSION),
+            "required": False,
+        },
+    ],
+}
+
+
+def _safe_key_segment(raw: str) -> str:
+    """Sanitize a user-supplied path segment for use in an S3 key.
+
+    Strips surrounding whitespace and slashes, rejects NUL bytes, and drops
+    ``..`` / ``.`` path components so users cannot escape ``s3_prefix`` or
+    produce surprising keys via crafted ``display_name`` values.
+    """
+    if not raw:
+        return ""
+    if "\x00" in raw:
+        raise ValueError(f"Invalid S3 key segment (NUL byte): {raw!r}")
+    parts = (p.strip() for p in raw.split("/"))
+    return "/".join(p for p in parts if p and p not in (".", ".."))
+
+
+def _unlink_quiet(path: str) -> None:
+    """Remove a temp file, logging (but not raising) on failure."""
+    try:
+        os.unlink(path)
+    except OSError:
+        logger.exception("Failed to remove temp file %s", path)
+
+
+def _make_progress_cb(task, current_file: str, file_index: int, total_files: int, bucket: str):
+    """Build a per-file progress callback for ``s3_uploader.upload_file``."""
+
+    def _cb(sent: int, total: int) -> None:
+        task.send_event(
+            "task-progress",
+            data={
+                "status": "Uploading to S3",
+                "progress": f"File {file_index} of {total_files}",
+                "current_file": current_file,
+                "bucket": bucket,
+                "bytes_sent": sent,
+                "bytes_total": total,
+                "percent": round(100 * sent / total, 1) if total else 0,
+            },
+        )
+
+    return _cb
+
+
+@celery.task(bind=True, name=TASK_NAME, metadata=TASK_METADATA, max_retries=0)
+def upload(
+    self,
+    pipe_result: str = None,
+    input_files: list = None,
+    output_path: str = None,
+    workflow_id: str = None,
+    task_config: dict = None,
+) -> str:
+    """Export input files to Amazon S3, with optional compression.
+
+    Args:
+        pipe_result: Base64-encoded result from the previous Celery task, if any.
+        input_files: List of input file dictionaries (unused if pipe_result exists).
+        output_path: Path to the output directory (unused — this task emits no files).
+        workflow_id: ID of the workflow.
+        task_config: User configuration for the task.
+
+    Returns:
+        Base64-encoded dictionary containing task results.
+    """
+    input_files = get_input_files(pipe_result, input_files or [])
+    task_config = task_config or {}
+
+    if not input_files:
+        return create_task_result(
+            output_files=[],
+            workflow_id=workflow_id,
+            command="S3 upload",
+            meta={"warnings": "No input files provided."},
+        )
+
+    bucket = task_config.get("s3_bucket")
+    if not bucket:
+        raise ValueError("task_config['s3_bucket'] is required.")
+    prefix = _safe_key_segment(task_config.get("s3_prefix") or "")
+    compression = task_config.get("compression") or "none"
+    if compression not in VALID_COMPRESSION:
+        raise ValueError(
+            f"task_config['compression'] must be one of {VALID_COMPRESSION!r}; "
+            f"got {compression!r}."
+        )
+
+    aws_region = os.environ.get("AWS_REGION")
+    if not aws_region:
+        raise RuntimeError("AWS_REGION environment variable is not set on the worker.")
+    # Empty string from compose's `${VAR:-}` default must collapse to None so
+    # boto3 falls back to its real-AWS endpoint.
+    endpoint_url = os.environ.get("AWS_S3_ENDPOINT_URL") or None
+
+    # Credentials are resolved via boto3's default credential chain (env vars,
+    # shared credentials file, IAM role, SSO). If none are available the first
+    # S3 call raises NoCredentialsError, which is caught below.
+    s3 = boto3.client("s3", region_name=aws_region, endpoint_url=endpoint_url)
+
+    def _make_key(name: str) -> str:
+        return "/".join(p for p in (prefix, name) if p)
+
+    total_files = len(input_files)
+    uploaded: list[dict] = []
+    failed: list[dict] = []
+
+    if compression == "tar.gz":
+        archive_name = f"{workflow_id or 'openrelik'}.tar.gz"
+        self.send_event(
+            "task-progress",
+            data={"status": "Building tar.gz archive", "files": total_files},
+        )
+        archive_path = compress_tar_gz(input_files)
+        key = _make_key(archive_name)
+        try:
+            on_progress = _make_progress_cb(self, archive_name, 1, 1, bucket)
+            size = upload_file(s3, archive_path, bucket, key, on_progress=on_progress)
+        except (ClientError, BotoCoreError) as exc:
+            raise RuntimeError(
+                f"S3 upload failed for archive -> s3://{bucket}/{key}: {exc}"
+            ) from exc
+        finally:
+            _unlink_quiet(archive_path)
+        uploaded.append(
+            {
+                "display_name": archive_name,
+                "key": key,
+                "size": size,
+                "bundled_files": [
+                    f.get("display_name") or os.path.basename(f["path"])
+                    for f in input_files
+                ],
+            }
+        )
+    else:
+        for i, input_file in enumerate(input_files, start=1):
+            display_name = input_file.get("display_name") or os.path.basename(
+                input_file["path"]
+            )
+            safe_name = _safe_key_segment(display_name)
+            if not safe_name:
+                failed.append(
+                    {"display_name": display_name, "error": "empty/invalid display_name"}
+                )
+                continue
+
+            self.send_event(
+                "task-progress",
+                data={
+                    "status": "Uploading to S3",
+                    "progress": f"File {i} of {total_files}",
+                    "current_file": display_name,
+                    "bucket": bucket,
+                },
+            )
+
+            cleanup_path = None
+            if compression == "gzip":
+                local_path = compress_gzip(input_file["path"])
+                cleanup_path = local_path
+                key_name = f"{safe_name}.gz"
+            else:
+                local_path = input_file["path"]
+                key_name = safe_name
+            key = _make_key(key_name)
+
+            try:
+                on_progress = _make_progress_cb(self, display_name, i, total_files, bucket)
+                size = upload_file(s3, local_path, bucket, key, on_progress=on_progress)
+                uploaded.append({"display_name": display_name, "key": key, "size": size})
+            except (ClientError, BotoCoreError) as exc:
+                logger.exception(
+                    "S3 upload failed for %s -> s3://%s/%s", display_name, bucket, key
+                )
+                failed.append(
+                    {"display_name": display_name, "key": key, "error": str(exc)}
+                )
+            finally:
+                if cleanup_path:
+                    _unlink_quiet(cleanup_path)
+
+    total_bytes = sum(u["size"] for u in uploaded)
+    self.send_event(
+        "task-progress",
+        data={
+            "status": "Done",
+            "uploaded": len(uploaded),
+            "failed": len(failed),
+            "bytes": total_bytes,
+        },
+    )
+
+    meta = {
+        "bucket": bucket,
+        "prefix": prefix,
+        "compression": compression,
+        "endpoint_url": endpoint_url,
+        "uploaded_count": len(uploaded),
+        "uploaded_bytes": total_bytes,
+        "uploaded_objects": uploaded,
+        "failed_count": len(failed),
+        "failed_objects": failed,
+    }
+
+    if failed:
+        # Celery only persists return values, not exception payloads — log the
+        # full meta so operators can recover what went where.
+        logger.error("S3 upload partial failure: %s", json.dumps(meta, default=str))
+        raise RuntimeError(
+            f"S3 upload completed with {len(failed)} failure(s) out of "
+            f"{total_files} file(s). Successful uploads: {len(uploaded)}. "
+            f"See worker logs for failed_objects details."
+        )
+
+    return create_task_result(
+        output_files=[],
+        workflow_id=workflow_id,
+        command=f"S3 upload (compression={compression})",
+        meta=meta,
+    )
