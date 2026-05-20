@@ -89,26 +89,6 @@ def _unlink_quiet(path: str) -> None:
         logger.exception("Failed to remove temp file %s", path)
 
 
-def _make_progress_cb(task, current_file: str, file_index: int, total_files: int, bucket: str):
-    """Build a per-file progress callback for ``s3_uploader.upload_file``."""
-
-    def _cb(sent: int, total: int) -> None:
-        task.send_event(
-            "task-progress",
-            data={
-                "status": "Uploading to S3",
-                "progress": f"File {file_index} of {total_files}",
-                "current_file": current_file,
-                "bucket": bucket,
-                "bytes_sent": sent,
-                "bytes_total": total,
-                "percent": round(100 * sent / total, 1) if total else 0,
-            },
-        )
-
-    return _cb
-
-
 @celery.task(bind=True, name=TASK_NAME, metadata=TASK_METADATA, max_retries=0)
 def upload(
     self,
@@ -175,10 +155,17 @@ def upload(
         display_name = input_file.get("display_name") or os.path.basename(
             input_file["path"]
         )
-        safe_name = _safe_key_segment(display_name)
+        # Prefer the upstream/source filename (basename of original_path) so the
+        # S3 key matches the originally uploaded artifact rather than any
+        # derived display_name from intermediate pipeline steps.
+        original_path = input_file.get("original_path")
+        source_name = (
+            os.path.basename(original_path) if original_path else display_name
+        )
+        safe_name = _safe_key_segment(source_name)
         if not safe_name:
             failed.append(
-                {"display_name": display_name, "error": "empty/invalid display_name"}
+                {"display_name": display_name, "error": "empty/invalid source name"}
             )
             continue
 
@@ -203,8 +190,13 @@ def upload(
         key = _make_key(key_name)
 
         try:
-            on_progress = _make_progress_cb(self, display_name, i, total_files, bucket)
-            size = upload_file(s3, local_path, bucket, key, on_progress=on_progress)
+            # Note: no per-byte progress callback. boto3.upload_file invokes
+            # callbacks from its multipart worker threads, and Celery's event
+            # dispatcher is not thread-safe — concurrent send_event calls have
+            # corrupted the event channel and prevented task-succeeded from
+            # reaching the mediator (UI stuck on "running"). One progress
+            # event per file from the main thread is enough.
+            size = upload_file(s3, local_path, bucket, key)
             uploaded.append({"display_name": display_name, "key": key, "size": size})
         except (ClientError, BotoCoreError) as exc:
             logger.exception(
