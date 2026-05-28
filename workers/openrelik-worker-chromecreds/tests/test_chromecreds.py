@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import unittest
 import tempfile
 import os
@@ -83,7 +84,7 @@ class TestChromeCredsAnalyser(unittest.TestCase):
         """Tests the celery command."""
         import json
         import base64
-        
+
         mock_output_file = MagicMock()
         mock_output_file.path = os.path.join(tempfile.gettempdir(), "test_report.dict")
         mock_output_file.to_dict.return_value = {"path": mock_output_file.path}
@@ -92,22 +93,21 @@ class TestChromeCredsAnalyser(unittest.TestCase):
         input_files = [
             {"path": self.TEST_SQL, "display_name": "test_login_data.sqlite"}
         ]
-        
+
         result = command(
             pipe_result=None,
             input_files=input_files,
             output_path="/tmp",
-            workflow_id="test_workflow"
+            workflow_id="test_workflow",
         )
-        
+
         decoded_result = json.loads(base64.b64decode(result).decode("utf-8"))
-        
+
         self.assertTrue("output_files" in decoded_result)
         self.assertTrue("task_report" in decoded_result)
         self.assertEqual(len(decoded_result["output_files"]), 1)
         self.assertEqual(len(decoded_result["task_report"]), 1)
-        
+
         # Clean up
         if os.path.exists(mock_output_file.path):
             os.remove(mock_output_file.path)
-
