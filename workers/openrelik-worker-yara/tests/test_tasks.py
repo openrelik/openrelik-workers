@@ -2,7 +2,13 @@ import json
 import os
 import pytest
 import shutil
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
+from src.tasks import (
+    on_task_prerun,
+    safe_list_get,
+    generate_report_from_matches,
+    YaraMatch,
+)
 from src.tasks import cleanup_fraken_output_log, command
 
 
@@ -112,10 +118,10 @@ def test_command_no_rules_provided():
 def test_command_empty_rules_collected():
     """Test that ValueError is raised when rules are provided but none are successfully read."""
     # Mock os.path.isfile and os.path.isdir to return False for everything
-    with patch("os.path.isfile", return_value=False), patch(
-        "os.path.isdir", return_value=False
+    with (
+        patch("os.path.isfile", return_value=False),
+        patch("os.path.isdir", return_value=False),
     ):
-
         task_config = {"Global Yara rules": "/non/existent/path"}
         with pytest.raises(ValueError, match="No Yara rules were collected"):
             command.run(
@@ -124,3 +130,158 @@ def test_command_empty_rules_collected():
                 input_files=[],
                 output_path="/tmp",
             )
+
+
+def test_on_task_prerun():
+    task = MagicMock()
+    task.name = "test_task"
+    with patch("src.tasks.log_root.bind") as mock_bind:
+        on_task_prerun(None, "task123", task, None, None)
+        mock_bind.assert_called_with(
+            task_id="task123", task_name="test_task", worker_name="Yara scan"
+        )
+
+
+def test_safe_list_get():
+    test_list = [1, 2, 3]
+    assert safe_list_get(test_list, 1, 99) == 2
+    assert safe_list_get(test_list, 5, 99) == 99
+
+
+def test_generate_report_from_matches():
+    matches = [
+        YaraMatch(
+            filepath="file1.txt",
+            hash="hash1",
+            rule="rule1",
+            desc="desc1",
+            ref="ref1",
+            score=100,
+        )
+    ]
+    report = generate_report_from_matches(matches)
+    report_dict = report.to_dict()
+    assert report_dict.get("title") == "Yara scan report"
+
+
+@patch("src.tasks.command.send_event")
+@patch("src.tasks.subprocess.Popen")
+@patch("src.tasks.create_task_result")
+@patch("src.tasks.create_output_file")
+@patch("src.tasks.is_disk_image")
+def test_command_success(
+    mock_is_disk_image,
+    mock_create_output_file,
+    mock_create_task_result,
+    mock_popen,
+    mock_send_event,
+    tmp_path,
+):
+    mock_is_disk_image.return_value = False
+
+    # Setup mock for create_output_file
+    def side_effect_create_output_file(output_path, display_name, **kwargs):
+        mock_file = MagicMock()
+        mock_file.path = str(tmp_path / display_name)
+        mock_file.to_dict.return_value = {"path": mock_file.path}
+        # pre-create the fraken output with mock data to avoid file not found
+        if display_name == "fraken_out.jsonl":
+            with open(mock_file.path, "w") as f:
+                f.write(
+                    '[{"ImagePath": "file1.txt", "SHA256": "hash", "Signature": "rule", "Description": "desc", "Reference": "ref", "Score": 100}]\n'
+                )
+        return mock_file
+
+    mock_create_output_file.side_effect = side_effect_create_output_file
+
+    # Setup mock Popen
+    mock_process = MagicMock()
+    mock_process.stderr.readlines.return_value = []
+    mock_popen.return_value = mock_process
+
+    mock_create_task_result.return_value = "mock_result"
+
+    # Create fake yara rule
+    yara_rule_file = tmp_path / "test.yar"
+    yara_rule_file.write_text("rule test {}")
+
+    task_config = {"Global Yara rules": str(yara_rule_file), "mount_disk_images": False}
+
+    input_files = [
+        {"path": str(tmp_path / "test_input.txt"), "display_name": "test_input.txt"}
+    ]
+
+    result = command.run(
+        None,
+        input_files=input_files,
+        output_path=str(tmp_path),
+        workflow_id="workflow123",
+        task_config=task_config,
+    )
+
+    assert result == "mock_result"
+    mock_popen.assert_called_once()
+    mock_create_task_result.assert_called_once()
+
+
+@patch("src.tasks.command.send_event")
+@patch("src.tasks.subprocess.Popen")
+@patch("src.tasks.create_task_result")
+@patch("src.tasks.create_output_file")
+@patch("src.tasks.BlockDevice")
+@patch("src.tasks.is_disk_image")
+def test_command_with_disk_image(
+    mock_is_disk_image,
+    mock_block_device,
+    mock_create_output_file,
+    mock_create_task_result,
+    mock_popen,
+    mock_send_event,
+    tmp_path,
+):
+    mock_is_disk_image.return_value = True
+
+    # Setup mock for create_output_file
+    def side_effect_create_output_file(output_path, display_name, **kwargs):
+        mock_file = MagicMock()
+        mock_file.path = str(tmp_path / display_name)
+        mock_file.to_dict.return_value = {"path": mock_file.path}
+        if display_name == "fraken_out.jsonl":
+            with open(mock_file.path, "w") as f:
+                f.write("[]\n")
+        return mock_file
+
+    mock_create_output_file.side_effect = side_effect_create_output_file
+
+    # Setup mock BlockDevice
+    mock_bd_instance = MagicMock()
+    mock_bd_instance.mount.return_value = [str(tmp_path / "mount1")]
+    mock_block_device.return_value = mock_bd_instance
+
+    # Setup mock Popen
+    mock_process = MagicMock()
+    mock_process.stderr.readlines.return_value = []
+    mock_popen.return_value = mock_process
+
+    mock_create_task_result.return_value = "mock_result"
+
+    task_config = {"Manual Yara rules": "rule test {}", "mount_disk_images": True}
+
+    input_files = [{"path": str(tmp_path / "disk.img"), "display_name": "disk.img"}]
+
+    with patch("os.getenv", return_value=""):
+        result = command.run(
+            None,
+            input_files=input_files,
+            output_path=str(tmp_path),
+            workflow_id="workflow123",
+            task_config=task_config,
+        )
+
+    assert result == "mock_result"
+    mock_block_device.assert_called_once()
+    mock_bd_instance.mount.assert_called_once()
+    mock_bd_instance.umount.assert_called_once()
+
+
+()
