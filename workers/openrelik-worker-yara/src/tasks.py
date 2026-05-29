@@ -312,25 +312,26 @@ def command(
                 logger.debug(f"Unmounting image {blockdevice.image_path}")
                 blockdevice.umount()
 
-    with open(fraken_output.path, "r", encoding="utf-8") as json_file:
-        matches_list_list = list(json_file)
+    if os.path.exists(fraken_output.path):
+        with open(fraken_output.path, "r", encoding="utf-8") as json_file:
+            matches_list_list = list(json_file)
 
-        for matches_list in matches_list_list:
-            matches = json.loads(matches_list)
+            for matches_list in matches_list_list:
+                matches = json.loads(matches_list)
 
-            for match in matches:
-                all_matches.append(
-                    YaraMatch(
-                        filepath=input_files_map.get(
-                            match["ImagePath"], match["ImagePath"]
-                        ),
-                        hash=match["SHA256"],
-                        rule=match["Signature"],
-                        desc=match["Description"],
-                        ref=match["Reference"],
-                        score=match["Score"],
+                for match in matches:
+                    all_matches.append(
+                        YaraMatch(
+                            filepath=input_files_map.get(
+                                match["ImagePath"], match["ImagePath"]
+                            ),
+                            hash=match["SHA256"],
+                            rule=match["Signature"],
+                            desc=match["Description"],
+                            ref=match["Reference"],
+                            score=match["Score"],
+                        )
                     )
-                )
 
     cleanup_fraken_output_log(fraken_output)
 
