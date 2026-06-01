@@ -490,6 +490,112 @@ def test_upload_reports_transient_failures_in_meta(tmp_path, monkeypatch):
     assert payload["meta"]["per_file"][0]["error_codes"] == {"500_boom": 5}
 
 
+def test_upload_slice_select_latest_filters_inputs(tmp_path, monkeypatch):
+    """slice_select='latest' must drop all but the slice-K-of-N where K==N
+    before any uploads happen."""
+    monkeypatch.setenv("SPLUNK_HEC_URL", "https://hec.example.com")
+    monkeypatch.setenv("SPLUNK_HEC_TOKEN", "tok")
+
+    files_uploaded: list[str] = []
+
+    class _StubUploader:
+        def __init__(self, *args, **kwargs):
+            files_uploaded.append(kwargs["file_path"])
+
+        async def run(self):
+            return UploadResult(success_count=1, failed_count=0)
+
+    monkeypatch.setattr(tasks, "HECUploader", _StubUploader)
+
+    inputs = [
+        {
+            "path": str(tmp_path / f"foo.plaso.slice-{k}-of-4.jsonl"),
+            "display_name": f"foo.plaso.slice-{k}-of-4.jsonl",
+        }
+        for k in range(1, 5)
+    ]
+
+    tasks.upload.run(
+        pipe_result=None,
+        input_files=inputs,
+        output_path=str(tmp_path),
+        workflow_id="wf",
+        task_config={"index": "idx", "slice_select": "latest"},
+    )
+
+    assert len(files_uploaded) == 1
+    assert files_uploaded[0].endswith("foo.plaso.slice-4-of-4.jsonl")
+
+
+def test_upload_slice_select_all_uploads_every_input(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPLUNK_HEC_URL", "https://hec.example.com")
+    monkeypatch.setenv("SPLUNK_HEC_TOKEN", "tok")
+
+    files_uploaded: list[str] = []
+
+    class _StubUploader:
+        def __init__(self, *args, **kwargs):
+            files_uploaded.append(kwargs["file_path"])
+
+        async def run(self):
+            return UploadResult(success_count=1, failed_count=0)
+
+    monkeypatch.setattr(tasks, "HECUploader", _StubUploader)
+
+    inputs = [
+        {
+            "path": str(tmp_path / f"foo.plaso.slice-{k}-of-4.jsonl"),
+            "display_name": f"foo.plaso.slice-{k}-of-4.jsonl",
+        }
+        for k in range(1, 5)
+    ]
+
+    tasks.upload.run(
+        pipe_result=None,
+        input_files=inputs,
+        output_path=str(tmp_path),
+        workflow_id="wf",
+        task_config={"index": "idx"},  # slice_select unset → "all"
+    )
+
+    assert len(files_uploaded) == 4
+
+
+def test_upload_slice_select_index_picks_specific_slice(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPLUNK_HEC_URL", "https://hec.example.com")
+    monkeypatch.setenv("SPLUNK_HEC_TOKEN", "tok")
+
+    files_uploaded: list[str] = []
+
+    class _StubUploader:
+        def __init__(self, *args, **kwargs):
+            files_uploaded.append(kwargs["file_path"])
+
+        async def run(self):
+            return UploadResult(success_count=1, failed_count=0)
+
+    monkeypatch.setattr(tasks, "HECUploader", _StubUploader)
+
+    inputs = [
+        {
+            "path": str(tmp_path / f"foo.plaso.slice-{k}-of-4.jsonl"),
+            "display_name": f"foo.plaso.slice-{k}-of-4.jsonl",
+        }
+        for k in range(1, 5)
+    ]
+
+    tasks.upload.run(
+        pipe_result=None,
+        input_files=inputs,
+        output_path=str(tmp_path),
+        workflow_id="wf",
+        task_config={"index": "idx", "slice_select": "2"},
+    )
+
+    assert len(files_uploaded) == 1
+    assert files_uploaded[0].endswith("foo.plaso.slice-2-of-4.jsonl")
+
+
 def test_upload_raises_with_permanent_error_message(tmp_path, monkeypatch):
     path = _write_jsonl(tmp_path, [{"n": 1}])
 
