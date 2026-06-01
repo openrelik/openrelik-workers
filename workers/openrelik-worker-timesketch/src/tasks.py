@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 import time
 
@@ -20,6 +21,15 @@ from timesketch_api_client import client as timesketch_client
 from timesketch_import_client import importer
 
 from .app import celery, redis_client
+
+# Setting up task logger
+logger: logging.Logger = logging.getLogger(__name__)
+
+COMPATIBLE_INPUTS = {
+    "data_types": [],
+    "mime_types": [],
+    "filenames": ["*.csv", "*.jsonl", "*.plaso"],
+}
 
 # Hardcoded list of available Timesketch analyzers
 TIMESKETCH_ANALYZERS = [
@@ -185,8 +195,17 @@ def upload(
     Returns:
         Base64-encoded dictionary containing task results.
     """
-    input_files = get_input_files(pipe_result, input_files or [])
+    input_files = get_input_files(pipe_result, input_files or [], filter=COMPATIBLE_INPUTS)
     task_config = task_config or {}
+
+    if not input_files:
+        logger.warning("No supported input files provided. Timesketch worker only supports CSV, JSONL, and PLASO files.")
+        return create_task_result(
+            output_files=[],
+            workflow_id=workflow_id,
+            command="Timesketch Importer Client",
+            meta={"warnings": "No supported input files provided. Expected *.csv, *.jsonl, or *.plaso"},
+        )
 
     # Connection details from environment variables.
     timesketch_server_url = os.environ.get("TIMESKETCH_SERVER_URL")
