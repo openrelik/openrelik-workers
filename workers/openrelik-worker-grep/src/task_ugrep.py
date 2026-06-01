@@ -49,7 +49,7 @@ TASK_METADATA = {
             "description": "Output statistics on the number of files and directories searched and matches found.",
             "type": "checkbox",
             "required": True,
-            "default_value": False,
+            "default_value": True,
         },
         {
             "name": "json_output",
