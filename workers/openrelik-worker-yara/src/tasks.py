@@ -98,6 +98,14 @@ class YaraMatch:
     score: int
 
 
+@dataclass
+class SkippedInput:
+    """Dataclass to store skipped Yara input information."""
+
+    input_name: str
+    reason: str
+
+
 def validate_scan_target(path: str, display_name: str = "input") -> None:
     """Reject scan targets that would silently scan the worker container."""
     if not path:
@@ -109,7 +117,7 @@ def validate_scan_target(path: str, display_name: str = "input") -> None:
         )
     if not os.path.exists(path):
         raise RuntimeError(f"Input path does not exist: {path}")
-    if not os.path.isfile(path) and not os.path.isdir(path):
+    if not (os.path.isfile(path) or os.path.isdir(path)):
         raise RuntimeError(
             f"Unsupported Yara scan target: {display_name}. "
             "The Yara worker can scan regular files and directories. "
@@ -160,16 +168,24 @@ def cleanup_fraken_output_log(logfile: OutputFile) -> None:
             json.dump(extracted_dicts, f)
 
 
-def generate_report_from_matches(matches: list[YaraMatch]) -> Report:
+def generate_report_from_matches(
+    matches: list[YaraMatch], skipped_inputs: list[SkippedInput] | None = None
+) -> Report:
     """Generate a report from Yara matches.
 
     Args:
         matches: List of YaraMatch objects.
+        skipped_inputs: List of skipped input files and the reason they were skipped.
 
     Returns:
         Report object.
     """
+    skipped_inputs = skipped_inputs or []
     report = Report("Yara scan report")
+    report.summary = f"{len(matches)} Yara match(es) found."
+    if skipped_inputs:
+        report.summary += f" {len(skipped_inputs)} input(s) skipped."
+
     matches_section = report.add_section()
     matches_section.add_paragraph("List of Yara matches found in the scanned files.")
     if matches:
@@ -188,6 +204,17 @@ def generate_report_from_matches(matches: list[YaraMatch]) -> Report:
         )
 
     matches_section.add_table(match_table)
+
+    if skipped_inputs:
+        skipped_section = report.add_section()
+        skipped_section.add_header("Skipped inputs")
+        skipped_section.add_paragraph(
+            "Inputs that were not scanned because they were not valid scan targets."
+        )
+        skipped_table = MarkdownTable(["input", "reason"])
+        for skipped_input in skipped_inputs:
+            skipped_table.add_row([skipped_input.input_name, skipped_input.reason])
+        skipped_section.add_table(skipped_table)
 
     return report
 
@@ -302,9 +329,16 @@ def command(
     disks_mounted = []
     try:
         folders_and_files = []
+        skipped_inputs = []
         bd = None
         for input_file in input_files:
             if "path" not in input_file:
+                skipped_inputs.append(
+                    SkippedInput(
+                        input_file.get("display_name", "UNKNOWN FILE"),
+                        "Input does not have a path.",
+                    )
+                )
                 logger.warning(
                     "Skipping file %s as it does not have an path", input_file
                 )
@@ -312,16 +346,33 @@ def command(
 
             input_file_path = input_file.get("path")
             display_name = input_file.get("display_name", input_file_path)
-            validate_scan_target(input_file_path, display_name)
+            try:
+                validate_scan_target(input_file_path, display_name)
+            except RuntimeError as e:
+                skipped_inputs.append(SkippedInput(display_name, str(e)))
+                logger.error(
+                    "Skipping Yara scan input %s (%s): %s",
+                    display_name,
+                    input_file_path,
+                    str(e),
+                )
+                continue
 
             # Check if disk image, mount and add mountpoints to scan
             if is_disk_image(input_file):
                 if not mount_disk_images:
-                    raise RuntimeError(
-                        "Disk image input is not supported in regular scan mode: "
-                        f"{display_name}. Enable mount_disk_images to scan files "
-                        "inside supported disk image filesystems."
+                    reason = (
+                        "Disk image input is not supported in regular scan mode. "
+                        "Enable mount_disk_images to scan files inside supported "
+                        "disk image filesystems."
                     )
+                    skipped_inputs.append(SkippedInput(display_name, reason))
+                    logger.error(
+                        "%s: %s",
+                        display_name,
+                        reason,
+                    )
+                    continue
 
                 try:
                     send_progress(self, "Mounting disk image", display_name)
@@ -341,18 +392,41 @@ def command(
                         input_file_path,
                         str(e),
                     )
-                    raise RuntimeError(
-                        "Disk image input is not supported or could not be "
-                        f"mounted by the Yara worker: {display_name}."
-                    ) from None
+                    skipped_inputs.append(
+                        SkippedInput(
+                            display_name,
+                            "Disk image input is not supported or could not be "
+                            "mounted by the Yara worker.",
+                        )
+                    )
+                    continue
 
                 if not mountpoints:
-                    raise RuntimeError(
-                        "No mountpoints returned for input file "
-                        f"{input_file.get('display_name')}"
+                    skipped_inputs.append(
+                        SkippedInput(
+                            input_file.get("display_name", input_file_path),
+                            "No mountpoints returned for input file.",
+                        )
                     )
+                    logger.error(
+                        "No mountpoints returned for input file %s",
+                        input_file.get("display_name"),
+                    )
+                    continue
                 for mountpoint in mountpoints:
-                    validate_scan_target(mountpoint, display_name)
+                    try:
+                        validate_scan_target(mountpoint, display_name)
+                    except RuntimeError as e:
+                        skipped_inputs.append(
+                            SkippedInput(f"{display_name}: {mountpoint}", str(e))
+                        )
+                        logger.error(
+                            "Skipping Yara scan mountpoint %s for %s: %s",
+                            mountpoint,
+                            display_name,
+                            str(e),
+                        )
+                        continue
                     folders_and_files.append("--folder")
                     folders_and_files.append(mountpoint)
             else:
@@ -360,7 +434,14 @@ def command(
                 folders_and_files.append(input_file_path)
 
         if not folders_and_files:
-            raise RuntimeError("No scan targets were produced from input files.")
+            message = "No scan targets were produced from input files."
+            if skipped_inputs:
+                last_skipped_input = skipped_inputs[-1]
+                message = (
+                    f"{message} Last skipped input error: "
+                    f"{last_skipped_input.input_name}: {last_skipped_input.reason}"
+                )
+            raise RuntimeError(message)
 
         cmd = ["fraken"] + folders_and_files + [f"{all_yara.path}"]
         logger.info(
@@ -421,7 +502,7 @@ def command(
 
     cleanup_fraken_output_log(fraken_output)
 
-    report = generate_report_from_matches(all_matches)
+    report = generate_report_from_matches(all_matches, skipped_inputs)
     report_file = create_output_file(
         output_path,
         display_name="yara-scan-report.md",

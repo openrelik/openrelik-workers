@@ -274,6 +274,63 @@ def test_command_rejects_disk_image_without_mount_disk_images(tmp_path):
     mock_run.assert_not_called()
 
 
+def test_command_skips_disk_image_without_mount_and_scans_other_inputs(tmp_path):
+    rule_file = tmp_path / "rule.yara"
+    rule_file.write_text('rule test { strings: $ = "test" condition: true }')
+    disk_file = tmp_path / "disk.E01"
+    disk_file.write_text("disk")
+    regular_file = tmp_path / "input.txt"
+    regular_file.write_text("test")
+
+    all_yara = _mock_output_file(tmp_path / "all.yara")
+    fraken_output = _mock_output_file(tmp_path / "fraken_out.jsonl")
+    fraken_stderr = _mock_output_file(tmp_path / "fraken_stderr.log")
+    report_file = _mock_output_file(tmp_path / "yara-scan-report.md")
+
+    def _is_disk_image(input_file):
+        return input_file["path"] == str(disk_file)
+
+    with patch.dict(os.environ, {}, clear=True), patch(
+        "src.tasks.create_output_file",
+        side_effect=[all_yara, fraken_output, fraken_stderr, report_file],
+    ), patch("src.tasks.is_disk_image", side_effect=_is_disk_image), patch(
+        "src.tasks.subprocess.run",
+        return_value=SimpleNamespace(returncode=0),
+    ) as mock_run, patch("src.tasks.logger") as mock_logger, patch.object(
+        command, "send_event"
+    ):
+        result = command.run(
+            None,
+            task_config={"Global Yara rules": str(rule_file)},
+            input_files=[
+                {"path": str(disk_file), "display_name": disk_file.name},
+                {"path": str(regular_file), "display_name": regular_file.name},
+            ],
+            output_path=str(tmp_path),
+        )
+
+    assert any(
+        "Disk image input is not supported in regular scan mode" in str(call)
+        for call in mock_logger.error.call_args_list
+    )
+    assert mock_run.call_args.args[0] == [
+        "fraken",
+        "--folder",
+        str(regular_file),
+        str(all_yara.path),
+    ]
+    with open(report_file.path, encoding="utf-8") as fh:
+        report_content = fh.read()
+    assert "Skipped inputs" in report_content
+    assert disk_file.name in report_content
+    assert "Disk image input is not supported in regular scan mode" in report_content
+
+    decoded_result = json.loads(base64.b64decode(result).decode("utf-8"))
+    task_report = decoded_result["task_report"]
+    assert "1 input(s) skipped" in task_report["summary"]
+    assert "Skipped inputs" in task_report["content"]
+
+
 def test_command_mounts_disk_image_before_scanning(tmp_path):
     rule_file = tmp_path / "rule.yara"
     rule_file.write_text('rule test { strings: $ = "test" condition: true }')
