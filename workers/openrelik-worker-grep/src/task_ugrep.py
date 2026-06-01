@@ -31,9 +31,41 @@ TASK_METADATA = {
         {
             "name": "pattern",
             "label": "",
-            "description": "Pattern to search for",
+            "description": "Pattern to search for (defaults to extended regular expression)",
             "type": "text",
             "required": True,
+        },
+        {
+            "name": "invert-match",
+            "label": "invert match",
+            "description": "Selected lines are those not matching any of the specified patterns.",
+            "type": "checkbox",
+            "required": True,
+            "default_value": False,
+        },
+        {
+            "name": "stats",
+            "label": "stats",
+            "description": "Output statistics on the number of files and directories searched and matches found.",
+            "type": "checkbox",
+            "required": True,
+            "default_value": False,
+        },
+        {
+            "name": "json_output",
+            "label": "JSON output",
+            "description": "Output file matches in JSON.",
+            "type": "checkbox",
+            "required": True,
+            "default_value": False,
+        },
+        {
+            "name": "decompress",
+            "label": "search archives",
+            "description": "Search compressed files and archives.",
+            "type": "checkbox",
+            "required": True,
+            "default_value": False,
         },
     ],
 }
@@ -65,9 +97,11 @@ def command(
     base_command = prepare_base_command(task_config)
     base_command_string = " ".join(base_command)
 
+    output_extension = ".ugrep.json" if task_config.get("json_output") else ".ugrep"
+
     for input_file in input_files:
         output_file = create_output_file(
-            output_path, display_name=input_file.get("display_name") + ".ugrep"
+            output_path, display_name=input_file.get("display_name") + output_extension
         )
         command = base_command + [input_file.get("path")]
 
@@ -105,6 +139,17 @@ def command(
 
 def prepare_base_command(task_config):
     base_command = ["ugrep"]
+
+    if task_config.get("stats"):
+        base_command.append("--stats")
+    if task_config.get("json_output"):
+        base_command.append("--json")
+    if task_config.get("decompress"):
+        base_command.append("--decompress")
+ 
+    # Pattern options
+    if task_config.get("invert-match"):
+        base_command.append("--invert-match")
     base_command.append(task_config.get("pattern"))
 
     base_command.append("--")
