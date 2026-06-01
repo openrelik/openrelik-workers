@@ -16,7 +16,6 @@ import asyncio
 import logging
 import os
 
-from openrelik_worker_common.slice_utils import select_slice
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 
 from .app import celery
@@ -80,20 +79,6 @@ TASK_METADATA = {
             "items": ["raw", "event"],
             "required": False,
         },
-        {
-            "name": "slice_select",
-            "label": "Time-slice selection",
-            "description": (
-                "When inputs are time-sliced psort outputs (filename pattern "
-                "<base>.slice-<K>-of-<N>.<ext>), choose which slice to upload. "
-                "'all' (default) uploads every slice; 'latest' uploads only "
-                "slice K=N per source; an integer K uploads only slice K. "
-                "Inputs without a slice suffix are always passed through."
-            ),
-            "type": "text",
-            "value": "all",
-            "required": False,
-        },
     ],
 }
 
@@ -128,10 +113,6 @@ def upload(
     """
     input_files = get_input_files(pipe_result, input_files or [], filter=COMPATIBLE_INPUTS)
     task_config = task_config or {}
-
-    input_files = select_slice(
-        input_files, mode=task_config.get("slice_select") or "all"
-    )
 
     if not input_files:
         return create_task_result(
