@@ -1,6 +1,10 @@
 # OpenRelik Worker for Grep
 
-This repository contains the OpenRelik worker designed to run grep on files to search for patterns.
+This repository contains the OpenRelik worker designed to search for patterns in files.
+
+It provides two tasks for two different matching engines:
+- Traditional Unix `grep`
+- More recent `ugrep` with support for fuzzy search, archive decompression and other features
 
 ### Installation
 
