@@ -18,6 +18,9 @@ test = ["pytest", "pytest-cov>=5.0.0,<6", "pytest-mock>=3.14.0,<4"]
 package = false
 default-groups = ["test"]
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
