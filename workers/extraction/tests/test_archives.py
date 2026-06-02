@@ -267,13 +267,17 @@ def _run_task_with_one_extracted_file(mock_celery_task, mock_dependencies, task_
     mock_dependencies["get_input_files"].return_value = [
         {"id": "file1", "display_name": "archive.zip", "path": "/p/archive.zip"}
     ]
+<<<<<<< HEAD
 <<<<<<< HEAD:workers/extraction/tests/test_archives.py
+=======
+>>>>>>> main
     mock_log_file = Mock(path="/tmp/log", to_dict=lambda: {"id": "log1"})
     mock_output_file = Mock(path="/tmp/extracted", to_dict=lambda: {"id": "f2"})
     mock_dependencies["create_output_file"].side_effect = [
         mock_log_file,
         mock_output_file,
     ]
+<<<<<<< HEAD
 =======
     mock_log_file = Mock(
         path="/tmp/log", to_dict=lambda: {"id": "log1"}
@@ -283,6 +287,8 @@ def _run_task_with_one_extracted_file(mock_celery_task, mock_dependencies, task_
     )
     mock_dependencies["create_output_file"].side_effect = [mock_log_file, mock_output_file]
 >>>>>>> a41f44b (Adds support for register_in_db flag (#143)):workers/openrelik-worker-extraction/tests/test_archives.py
+=======
+>>>>>>> main
     mock_dependencies["extract_archive"].return_value = ("cmd", "/tmp/export")
 
     mock_extracted = Mock()
@@ -305,6 +311,7 @@ def _run_task_with_one_extracted_file(mock_celery_task, mock_dependencies, task_
 
 def test_extracted_files_register_in_db_by_default(mock_celery_task, mock_dependencies):
     """Without the skip switch, extracted files opt in to DB registration."""
+<<<<<<< HEAD
 <<<<<<< HEAD:workers/extraction/tests/test_archives.py
     _run_task_with_one_extracted_file(
         mock_celery_task, mock_dependencies, task_config={}
@@ -312,12 +319,18 @@ def test_extracted_files_register_in_db_by_default(mock_celery_task, mock_depend
 =======
     _run_task_with_one_extracted_file(mock_celery_task, mock_dependencies, task_config={})
 >>>>>>> a41f44b (Adds support for register_in_db flag (#143)):workers/openrelik-worker-extraction/tests/test_archives.py
+=======
+    _run_task_with_one_extracted_file(
+        mock_celery_task, mock_dependencies, task_config={}
+    )
+>>>>>>> main
 
     # call_args_list: [0] is the log file, [1] is the extracted file.
     extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
     assert extracted_call.kwargs.get("register_in_db") is True
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD:workers/extraction/tests/test_archives.py
 def test_extracted_files_skip_db_when_register_in_db_false(
     mock_celery_task, mock_dependencies
@@ -325,6 +338,11 @@ def test_extracted_files_skip_db_when_register_in_db_false(
 =======
 def test_extracted_files_skip_db_when_register_in_db_false(mock_celery_task, mock_dependencies):
 >>>>>>> a41f44b (Adds support for register_in_db flag (#143)):workers/openrelik-worker-extraction/tests/test_archives.py
+=======
+def test_extracted_files_skip_db_when_register_in_db_false(
+    mock_celery_task, mock_dependencies
+):
+>>>>>>> main
     """register_in_db=False in task_config propagates to each extracted file."""
     _run_task_with_one_extracted_file(
         mock_celery_task, mock_dependencies, task_config={"register_in_db": False}
@@ -332,7 +350,10 @@ def test_extracted_files_skip_db_when_register_in_db_false(mock_celery_task, moc
 
     extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
     assert extracted_call.kwargs.get("register_in_db") is False
+<<<<<<< HEAD
 <<<<<<< HEAD:workers/extraction/tests/test_archives.py
+=======
+>>>>>>> main
 
 
 def test_extract_archive_task_exclusion_pattern(mock_celery_task, mock_dependencies):
@@ -358,5 +379,8 @@ def test_extract_archive_task_exclusion_pattern(mock_celery_task, mock_dependenc
     # Access the call args to verify exclusion patterns
     args, _ = mock_dependencies["extract_archive"].call_args
     assert args[6] == ["$MFT", "*.tmp"]
+<<<<<<< HEAD
 =======
 >>>>>>> a41f44b (Adds support for register_in_db flag (#143)):workers/openrelik-worker-extraction/tests/test_archives.py
+=======
+>>>>>>> main

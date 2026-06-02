@@ -65,7 +65,10 @@ TASK_METADATA = {
             "value": True,
             "required": False,
         },
+<<<<<<< HEAD
 <<<<<<< HEAD:workers/extraction/src/archives.py
+=======
+>>>>>>> main
         {
             "name": "file_exclusion",
             "label": "Select files (glob patterns) to exclude from extraction",
@@ -75,8 +78,11 @@ TASK_METADATA = {
             "type": "text",
             "required": False,
         },
+<<<<<<< HEAD
 =======
 >>>>>>> a41f44b (Adds support for register_in_db flag (#143)):workers/openrelik-worker-extraction/src/archives.py
+=======
+>>>>>>> main
     ],
 }
 
@@ -126,10 +132,14 @@ def extract_archive_task(
     file_filters = task_config.get("file_filter") or []
     ignore_prompts = task_config.get("ignore_prompts", True)
     register_in_db = task_config.get("register_in_db", True)
+<<<<<<< HEAD
 <<<<<<< HEAD:workers/extraction/src/archives.py
     exclusion_patterns = task_config.get("file_exclusion", [])
 =======
 >>>>>>> a41f44b (Adds support for register_in_db flag (#143)):workers/openrelik-worker-extraction/src/archives.py
+=======
+    exclusion_patterns = task_config.get("file_exclusion", [])
+>>>>>>> main
     if file_filters:
         file_filters = file_filters.split(",")
     if exclusion_patterns:
