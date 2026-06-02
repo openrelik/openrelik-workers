@@ -5,8 +5,8 @@ on:
   push:
     branches: [ main ]
     paths: &common
-      - 'workers/openrelik-worker-extraction/**'
-      - 'workers/openrelik-worker-plaso/**'
+      - 'workers/extraction/**'
+      - 'workers/plaso/**'
   release:
     types: [published]
 
@@ -51,6 +51,9 @@ jobs:
         run: |
           RAW_PATH="${{ matrix.service }}"
           CLEAN_NAME="${RAW_PATH#*/}"
+          if [[ "${CLEAN_NAME}" != openrelik-worker-* ]]; then
+            CLEAN_NAME="openrelik-worker-${CLEAN_NAME}"
+          fi
           echo "service_name=${CLEAN_NAME}" >> $GITHUB_OUTPUT
 
       - name: Log in to the Container registry
