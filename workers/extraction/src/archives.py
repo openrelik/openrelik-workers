@@ -65,6 +65,15 @@ TASK_METADATA = {
             "value": True,
             "required": False,
         },
+        {
+            "name": "file_exclusion",
+            "label": "Select files (glob patterns) to exclude from extraction",
+            "description": (
+                "Provide a comma separated list of patterns to exclude from extraction. Example: *.txt,logs/*,**/*.evtx"
+            ),
+            "type": "text",
+            "required": False,
+        },
     ],
 }
 
@@ -114,8 +123,11 @@ def extract_archive_task(
     file_filters = task_config.get("file_filter") or []
     ignore_prompts = task_config.get("ignore_prompts", True)
     register_in_db = task_config.get("register_in_db", True)
+    exclusion_patterns = task_config.get("file_exclusion", [])
     if file_filters:
         file_filters = file_filters.split(",")
+    if exclusion_patterns:
+        exclusion_patterns = exclusion_patterns.split(",")
 
     # Send a task progress event to indicate the task has started
     self.send_event("task-progress")
@@ -143,6 +155,7 @@ def extract_archive_task(
                 file_filters,
                 archive_password,
                 ignore_prompts,
+                exclusion_patterns,
             )
         except Exception as e:
             logger.error(f"extract_archive failed: {e}")
