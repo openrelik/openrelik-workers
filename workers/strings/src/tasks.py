@@ -121,19 +121,25 @@ def strings(
                 start_time = datetime.now()
                 update_interval_s = 3
 
-                while process.poll() is None:
-                    extracted_strings = count_file_lines(output_file.path)
-                    duration = datetime.now() - start_time
-                    rate = (
-                        int(extracted_strings / duration.total_seconds())
-                        if duration.total_seconds() > 0
-                        else 0
-                    )
-                    self.send_event(
-                        "task-progress",
-                        data={"extracted_strings": extracted_strings, "rate": rate},
-                    )
-                    time.sleep(update_interval_s)
+                # Block until exit; emit progress only while a file is still
+                # being processed. Polling with a fixed sleep per file made
+                # multi-thousand-file workflows take hours of pure sleep.
+                while True:
+                    try:
+                        process.wait(timeout=update_interval_s)
+                        break
+                    except subprocess.TimeoutExpired:
+                        extracted_strings = count_file_lines(output_file.path)
+                        duration = datetime.now() - start_time
+                        rate = (
+                            int(extracted_strings / duration.total_seconds())
+                            if duration.total_seconds() > 0
+                            else 0
+                        )
+                        self.send_event(
+                            "task-progress",
+                            data={"extracted_strings": extracted_strings, "rate": rate},
+                        )
             output_files.append(output_file.to_dict())
 
     if not output_files:
