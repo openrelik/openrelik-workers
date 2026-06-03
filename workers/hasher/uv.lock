@@ -242,16 +242,16 @@ redis = [
 
 [[package]]
 name = "openrelik-worker-common"
-version = "0.17.3"
+version = "0.17.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "debugpy" },
     { name = "redis" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/3b/a5929c0075974760a4799847835d862cd9035f1069e9be5872a4d2c727f8/openrelik_worker_common-0.17.3.tar.gz", hash = "sha256:5d63fb297fffbfb5281736c855bdb4e97c0b15cdb1641fd1912039beeb0e823b", size = 74085, upload-time = "2026-05-29T20:08:20.609Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c5/0b/116ebb57c45477cfc5d04ae15e898859f80065887b6bf62cfbe5a1da725f/openrelik_worker_common-0.17.4.tar.gz", hash = "sha256:c159ad13fc0f629fd69b46265debed0201aa7a4e5f879ebc7b2f0aae1cd2a79e", size = 74295, upload-time = "2026-06-03T22:47:27.074Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/35/aa/4a2c3e56c789243ccff2cf9f9ca95245ffd0f63b47b23a6fa105c6c39912/openrelik_worker_common-0.17.3-py3-none-any.whl", hash = "sha256:8c8c4125b8e35222f7f645d5a543d30856b0da7056ee610f4111e398e4a207aa", size = 26665, upload-time = "2026-05-29T20:08:19.41Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/55/372f71da29bd5926a44c30fb6f5e5bb2f0376a54ebb8eeabad75644c768c/openrelik_worker_common-0.17.4-py3-none-any.whl", hash = "sha256:b37ef993930b1b4d2428bb70f3ea566eed65f803f4ab1d3f849d2035271eaeeb", size = 26800, upload-time = "2026-06-03T22:47:25.974Z" },
 ]
 
 [[package]]
