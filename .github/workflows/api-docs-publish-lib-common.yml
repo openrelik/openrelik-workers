@@ -1,7 +1,13 @@
-name: website
+name: Publish lib api documentation
 
 # build the documentation new commits on main and PRs
-on: [push]
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/openrelik-worker-common/**'
+  workflow_dispatch:
 
 # security: restrict permissions for CI jobs.
 permissions:
@@ -11,6 +17,10 @@ jobs:
   # Build the documentation and upload the static HTML files as an artifact.
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lib/openrelik-worker-common
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,6 +46,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lib/openrelik-worker-common
     permissions:
       pages: write
       id-token: write

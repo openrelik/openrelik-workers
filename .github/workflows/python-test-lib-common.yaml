@@ -1,14 +1,21 @@
-name: Python Tests
+name: Python Tests Lib Common
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lib/openrelik-worker-common
+
     strategy:
       matrix:
         python-version: ["3.12"]
+
     steps:
     - uses: actions/checkout@v4
     - name: Set up uv
@@ -20,19 +27,13 @@ jobs:
       run: |
         sudo modprobe nbd
         sudo lsmod
-    - name: Install qemu-utils
+    - name: Install apt dependencies
       run: |
         sudo apt update -y
-        sudo apt install -y qemu-utils
-    - name: Install dependencies
+        sudo apt install -y qemu-utils john hashcat
+    - name: Install uv dependencies
       run: |
         uv sync --all-groups
-        sudo apt-get install john hashcat
     - name: Test with pytest - ${{ matrix.python-version }}
       run: |
-        uv run pytest --cov=. --cov-branch --cov-report=xml -v
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        slug: openrelik/openrelik-worker-common
+        uv run pytest --cov=. --cov-branch -v
