@@ -8,7 +8,7 @@ Documentation can be found [here](https://openrelik.github.io/openrelik-worker-c
 
 # Run Tests
 ```
-sudo apt-get install john john-data hashcat qemu-utils fdisk ntfs-3g
+sudo apt-get install john john-data hashcat qemu-utils fdisk ntfs-3g ewf-tools
 uv sync --all-groups
 uv run pytest --cov=.
 ```
