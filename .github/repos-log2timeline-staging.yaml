@@ -1,2 +1,2 @@
-workers/openrelik-worker-plaso: 'workers/openrelik-worker-plaso/**'
-workers/openrelik-worker-extraction: 'workers/openrelik-worker-extraction/**'
+workers/plaso: 'workers/plaso/**'
+workers/extraction: 'workers/extraction/**'
