@@ -1,10 +1,8 @@
-[![codecov](https://codecov.io/gh/openrelik/openrelik-worker-common/graph/badge.svg?token=T0Z72PB3YL)](https://codecov.io/gh/openrelik/openrelik-worker-common)
-
 # openrelik-worker-common
 Common utilities for OpenRelik workers
 
 # Documentation
-Documentation can be found [here](https://openrelik.github.io/openrelik-worker-common/openrelik_worker_common/index.html)
+Documentation can be found [here](https://openrelik.github.io/openrelik-workers/openrelik_worker_common/index.html)
 
 # Run Tests
 ```
