@@ -20,7 +20,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: lib/openrelik-worker-common
+        working-directory: lib/
 
     steps:
       - name: Checkout repository
@@ -47,4 +47,4 @@ jobs:
         if: ${{ inputs.dry_run == false }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: lib/openrelik-worker-common/dist/
+          packages-dir: lib/dist/

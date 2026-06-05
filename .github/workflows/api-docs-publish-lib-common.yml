@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths:
-      - 'lib/openrelik-worker-common/**'
+      - 'lib/openrelik_worker_common/**'
   workflow_dispatch:
 
 # security: restrict permissions for CI jobs.
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: lib/openrelik-worker-common
+        working-directory: lib/
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: lib/openrelik-worker-common
+        working-directory: lib/
     permissions:
       pages: write
       id-token: write
