@@ -2,7 +2,7 @@
 name = "openrelik-worker-photorec"
 version = "2025.01.21"
 description = "Run PhotoRec on a set of files for file carving and data recovery"
-authors = [{ name = "hacktobeer", email = "ramsesdebeer@gmail.com" }]
+authors = [{ name = "sa3eed3ed", email = "sa3eed3ed@users.noreply.github.com" }]
 requires-python = ">=3.12,<4"
 readme = "README.md"
 dependencies = [
