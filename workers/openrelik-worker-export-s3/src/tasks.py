@@ -62,8 +62,66 @@ TASK_METADATA = {
             "items": list(VALID_COMPRESSION),
             "required": False,
         },
+        {
+            "name": "object_name",
+            "label": "Object name pattern",
+            "description": (
+                "Optional name for the uploaded object (the file portion of the "
+                "S3 key, joined under 'S3 key prefix'). The '{basename}' "
+                "placeholder is replaced with the source artifact name supplied "
+                "via 'Source basename' — set a distinguisher around it (e.g. "
+                "'{basename}_2024-01') to keep multiple export tasks from "
+                "colliding. The uploaded file's extension is appended "
+                "automatically. Leave blank to use the upstream filename."
+            ),
+            "type": "text",
+            "required": False,
+        },
+        {
+            "name": "export_basename",
+            "label": "Source basename",
+            "description": (
+                "Value substituted into '{basename}' in the object name pattern. "
+                "Typically injected per-import by an importer (param_name "
+                "'export_basename') rather than set by hand."
+            ),
+            "type": "text",
+            "required": False,
+        },
     ],
 }
+
+
+def _file_extension(input_file: dict) -> str:
+    """Return the upload file's extension (with leading dot), or '' if none.
+
+    Prefers the display_name, falling back to the on-disk path. Only the final
+    extension is returned, so 'abc.plaso.csv' yields '.csv'.
+    """
+    name = input_file.get("display_name") or os.path.basename(
+        input_file.get("path", "")
+    )
+    return os.path.splitext(name)[1]
+
+
+def _resolve_object_name(
+    pattern: str, basename: str, input_file: dict, fallback: str
+) -> str:
+    """Build the object name from a user pattern, or fall back to ``fallback``.
+
+    When ``pattern`` is set, ``{basename}`` is substituted with ``basename`` and
+    the upload file's own extension is appended. A pattern that references
+    ``{basename}`` without a value provided is treated as unset so callers fall
+    back rather than emit a literal '{basename}' key.
+    """
+    pattern = (pattern or "").strip()
+    if not pattern:
+        return fallback
+    if "{basename}" in pattern:
+        if not basename:
+            return fallback
+        pattern = pattern.replace("{basename}", basename)
+    return f"{pattern}{_file_extension(input_file)}"
 
 
 def _safe_key_segment(raw: str) -> str:
@@ -125,6 +183,8 @@ def upload(
     if not bucket:
         raise ValueError("task_config['s3_bucket'] is required.")
     prefix = _safe_key_segment(task_config.get("s3_prefix") or "")
+    object_name_pattern = task_config.get("object_name") or ""
+    export_basename = task_config.get("export_basename") or ""
     compression = task_config.get("compression") or "none"
     if compression not in VALID_COMPRESSION:
         raise ValueError(
@@ -159,8 +219,14 @@ def upload(
         # S3 key matches the originally uploaded artifact rather than any
         # derived display_name from intermediate pipeline steps.
         original_path = input_file.get("original_path")
-        source_name = (
+        fallback_name = (
             os.path.basename(original_path) if original_path else display_name
+        )
+        # An object-name pattern (with {basename} from export_basename) wins over
+        # the upstream name — this is how the original artifact name survives a
+        # pipeline that has otherwise reduced everything to UUIDs.
+        source_name = _resolve_object_name(
+            object_name_pattern, export_basename, input_file, fallback_name
         )
         safe_name = _safe_key_segment(source_name)
         if not safe_name:

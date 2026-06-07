@@ -128,6 +128,103 @@ def test_upload_gzip_uses_original_path_basename(tmp_path):
 
 
 @mock_aws
+def test_object_name_pattern_basename_with_extension(tmp_path):
+    """An object_name pattern + export_basename names the key after the source
+    artifact, keeping the uploaded file's own extension."""
+    _create_bucket()
+    inputs = [
+        _make_input(
+            tmp_path,
+            "deadbeef.plaso.csv",
+            b"timeline",
+            display_name="deadbeef.plaso.csv",
+            original_path="/derived/deadbeef.plaso.csv",
+        )
+    ]
+
+    raw = tasks.upload(
+        input_files=inputs,
+        workflow_id="wf-name",
+        task_config={
+            "s3_bucket": "test-bucket",
+            "s3_prefix": "case-1",
+            "object_name": "{basename}",
+            "export_basename": "evidence",
+        },
+    )
+    result = _decode(raw)
+    assert result["meta"]["uploaded_objects"][0]["key"] == "case-1/evidence.csv"
+
+    s3 = boto3.client("s3", region_name="us-east-1")
+    keys = [o["Key"] for o in s3.list_objects_v2(Bucket="test-bucket").get("Contents", [])]
+    assert keys == ["case-1/evidence.csv"]
+
+
+@mock_aws
+def test_object_name_pattern_with_slice_distinguisher(tmp_path):
+    """A pattern that wraps {basename} keeps multiple export tasks from
+    colliding — the distinguisher lives in the template, not the importer."""
+    _create_bucket()
+    inputs = [_make_input(tmp_path, "uuid.csv", b"slice", display_name="uuid.csv")]
+
+    raw = tasks.upload(
+        input_files=inputs,
+        workflow_id="wf-slice",
+        task_config={
+            "s3_bucket": "test-bucket",
+            "object_name": "{basename}_2024-01",
+            "export_basename": "evidence",
+        },
+    )
+    result = _decode(raw)
+    assert result["meta"]["uploaded_objects"][0]["key"] == "evidence_2024-01.csv"
+
+
+@mock_aws
+def test_object_name_pattern_without_basename_value_falls_back(tmp_path):
+    """A pattern referencing {basename} with no export_basename provided falls
+    back to the upstream name rather than emitting a literal '{basename}'."""
+    _create_bucket()
+    inputs = [
+        _make_input(
+            tmp_path,
+            "uuid.csv",
+            b"x",
+            display_name="uuid.csv",
+            original_path="/derived/uuid.csv",
+        )
+    ]
+
+    raw = tasks.upload(
+        input_files=inputs,
+        workflow_id="wf-noval",
+        task_config={"s3_bucket": "test-bucket", "object_name": "{basename}"},
+    )
+    result = _decode(raw)
+    assert result["meta"]["uploaded_objects"][0]["key"] == "uuid.csv"
+
+
+@mock_aws
+def test_object_name_pattern_applies_before_gzip_suffix(tmp_path):
+    """With gzip, the resolved object name still gets the .gz suffix."""
+    _create_bucket()
+    inputs = [_make_input(tmp_path, "uuid.csv", b"x", display_name="uuid.csv")]
+
+    raw = tasks.upload(
+        input_files=inputs,
+        workflow_id="wf-gznm",
+        task_config={
+            "s3_bucket": "test-bucket",
+            "compression": "gzip",
+            "object_name": "{basename}",
+            "export_basename": "evidence",
+        },
+    )
+    result = _decode(raw)
+    assert result["meta"]["uploaded_objects"][0]["key"] == "evidence.csv.gz"
+
+
+@mock_aws
 def test_upload_no_inputs_returns_warning(tmp_path):
     _create_bucket()
     raw = tasks.upload(
