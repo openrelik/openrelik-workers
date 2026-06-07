@@ -450,6 +450,87 @@ def test_upload_happy_path(tmp_path, monkeypatch):
     assert payload["output_files"] == []
 
 
+@pytest.mark.parametrize(
+    "source, basename, expected",
+    [
+        (None, "evidence", None),
+        ("", "evidence", None),
+        ("   ", "evidence", None),
+        ("static-source", "evidence", "static-source"),
+        ("{basename}", "evidence", "evidence"),
+        ("{basename}_2024-01", "evidence", "evidence_2024-01"),
+        # {basename} requested but no value provided -> fall back to per-file name.
+        ("{basename}", None, None),
+        ("{basename}", "  ", None),
+    ],
+)
+def test_resolve_source(source, basename, expected):
+    assert tasks._resolve_source(source, basename) == expected
+
+
+def test_upload_passes_resolved_source_to_uploader(tmp_path, monkeypatch):
+    """The {basename} placeholder in 'source' is resolved from export_basename
+    and handed to the uploader as the Splunk source."""
+    path = _write_jsonl(tmp_path, [{"n": 1}])
+
+    monkeypatch.setenv("SPLUNK_HEC_URL", "https://hec.example.com")
+    monkeypatch.setenv("SPLUNK_HEC_TOKEN", "tok")
+
+    captured: dict = {}
+
+    class _CapturingUploader:
+        def __init__(self, *args, **kwargs):
+            captured.update(kwargs)
+
+        async def run(self):
+            return UploadResult(success_count=1, failed_count=0)
+
+    monkeypatch.setattr(tasks, "HECUploader", _CapturingUploader)
+
+    tasks.upload.run(
+        pipe_result=None,
+        input_files=[{"path": path, "display_name": "uuid.jsonl"}],
+        output_path=str(tmp_path),
+        workflow_id="wf",
+        task_config={
+            "index": "idx",
+            "source": "{basename}_2024-01",
+            "export_basename": "evidence",
+        },
+    )
+
+    assert captured["source"] == "evidence_2024-01"
+
+
+def test_upload_source_falls_back_to_display_name(tmp_path, monkeypatch):
+    """With no source override, the per-file display name is used as source."""
+    path = _write_jsonl(tmp_path, [{"n": 1}])
+
+    monkeypatch.setenv("SPLUNK_HEC_URL", "https://hec.example.com")
+    monkeypatch.setenv("SPLUNK_HEC_TOKEN", "tok")
+
+    captured: dict = {}
+
+    class _CapturingUploader:
+        def __init__(self, *args, **kwargs):
+            captured.update(kwargs)
+
+        async def run(self):
+            return UploadResult(success_count=1, failed_count=0)
+
+    monkeypatch.setattr(tasks, "HECUploader", _CapturingUploader)
+
+    tasks.upload.run(
+        pipe_result=None,
+        input_files=[{"path": path, "display_name": "events.jsonl"}],
+        output_path=str(tmp_path),
+        workflow_id="wf",
+        task_config={"index": "idx"},
+    )
+
+    assert captured["source"] == "events.jsonl"
+
+
 def test_upload_reports_transient_failures_in_meta(tmp_path, monkeypatch):
     # A batch that exhausts retries (no permanent_error) should NOT fail the
     # Celery task — the counts just show up in the meta.

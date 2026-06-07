@@ -63,7 +63,24 @@ TASK_METADATA = {
         {
             "name": "source",
             "label": "Source override",
-            "description": "Optional source field. Defaults to the input display name.",
+            "description": (
+                "Optional source field. The '{basename}' placeholder is replaced "
+                "with the source artifact name supplied via 'Source basename'; "
+                "add a distinguisher around it (e.g. '{basename}_2024-01') to "
+                "keep multiple export tasks from sharing one source. Defaults to "
+                "the input display name."
+            ),
+            "type": "text",
+            "required": False,
+        },
+        {
+            "name": "export_basename",
+            "label": "Source basename",
+            "description": (
+                "Value substituted into '{basename}' in the source override. "
+                "Typically injected per-import by an importer (param_name "
+                "'export_basename') rather than set by hand."
+            ),
             "type": "text",
             "required": False,
         },
@@ -81,6 +98,27 @@ TASK_METADATA = {
         },
     ],
 }
+
+
+def _resolve_source(source: str | None, basename: str | None) -> str | None:
+    """Resolve the Splunk 'source' override, substituting '{basename}'.
+
+    Returns the override with '{basename}' replaced by ``basename`` (the source
+    artifact name, typically injected per-import). A pattern that references
+    '{basename}' with no value provided collapses to ``None`` so the caller
+    falls back to the per-file display name rather than emitting a literal
+    '{basename}' source. Unlike the S3 object name, no extension is appended —
+    a Splunk source is a label, not a filename.
+    """
+    source = (source or "").strip()
+    if not source:
+        return None
+    if "{basename}" in source:
+        basename = (basename or "").strip()
+        if not basename:
+            return None
+        source = source.replace("{basename}", basename)
+    return source
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -136,7 +174,9 @@ def upload(
     sourcetype = task_config.get("sourcetype") or "_json"
     endpoint = task_config.get("hec_endpoint") or "raw"
     host = task_config.get("host")
-    source_override = task_config.get("source")
+    source_override = _resolve_source(
+        task_config.get("source"), task_config.get("export_basename")
+    )
 
     total_files = len(input_files)
     total_success = 0
