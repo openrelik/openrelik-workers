@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import json
+from pathlib import Path
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -361,3 +363,111 @@ def test_extract_task_output_processing_with_artifact_types(
     )
 
     assert mock_dependencies["create_output_file"].call_count == 2
+
+
+@patch("src.image_export.telemetry")
+def test_extract_task_hashes_disabled_by_default(
+    mock_telemetry, mock_celery_task, mock_dependencies
+):
+    """Test that image_export runs with --no-hashes unless requested."""
+    mock_dependencies["get_input_files"].return_value = [{"path": "test.dd", "id": "1"}]
+    mock_dependencies["create_task_result"].return_value = "task_result"
+
+    mock_process = MagicMock()
+    mock_process.poll.return_value = 0
+    mock_process.stdout.read.return_value = "Process output"
+    mock_process.stderr.read.return_value = ""
+    mock_dependencies["popen"].return_value = mock_process
+    mock_dependencies["glob"].return_value = []
+
+    extract_task.__class__.run(
+        mock_celery_task,
+        task_config={"filenames": "evil.exe"},
+        output_path="/tmp/output",
+        workflow_id="workflow-123",
+    )
+
+    call_args = mock_dependencies["popen"].call_args[0][0]
+    assert "--no-hashes" in call_args
+
+
+@patch("src.image_export.telemetry")
+def test_extract_task_calculate_hashes_enables_hashing(
+    mock_telemetry, mock_celery_task, mock_dependencies
+):
+    """Test that calculate_hashes removes --no-hashes from the command."""
+    mock_dependencies["get_input_files"].return_value = [{"path": "test.dd", "id": "1"}]
+    mock_dependencies["create_task_result"].return_value = "task_result"
+
+    mock_process = MagicMock()
+    mock_process.poll.return_value = 0
+    mock_process.stdout.read.return_value = "Process output"
+    mock_process.stderr.read.return_value = ""
+    mock_dependencies["popen"].return_value = mock_process
+    mock_dependencies["glob"].return_value = []
+
+    extract_task.__class__.run(
+        mock_celery_task,
+        task_config={"filenames": "evil.exe", "calculate_hashes": True},
+        output_path="/tmp/output",
+        workflow_id="workflow-123",
+    )
+
+    call_args = mock_dependencies["popen"].call_args[0][0]
+    assert "--no-hashes" not in call_args
+
+
+@patch("src.image_export.telemetry")
+def test_extract_task_registers_hash_manifest(
+    mock_telemetry, mock_celery_task, tmp_path
+):
+    """Test that the hashes.json manifest is registered with its data type."""
+    export_root = None
+
+    def fake_popen(command, **kwargs):
+        # image_export.py writes hashes.json at the export root; emulate it.
+        nonlocal export_root
+        export_root = command[command.index("--write") + 1]
+        manifest = Path(export_root) / "hashes.json"
+        manifest.write_text(json.dumps([{"sha256": "a" * 64, "paths": ["/bin/ls"]}]))
+        process = MagicMock()
+        process.poll.return_value = 0
+        process.stdout.read.return_value = ""
+        process.stderr.read.return_value = ""
+        return process
+
+    created = []
+
+    def fake_create_output_file(output_path, **kwargs):
+        output_file = MagicMock()
+        output_file.path = str(tmp_path / f"out-{len(created)}")
+        output_file.to_dict.return_value = kwargs
+        created.append(kwargs)
+        return output_file
+
+    with (
+        patch("src.image_export.get_input_files") as mock_get_input_files,
+        patch(
+            "src.image_export.create_output_file",
+            side_effect=fake_create_output_file,
+        ),
+        patch("src.image_export.create_task_result") as mock_create_task_result,
+        patch("src.image_export.subprocess.Popen", side_effect=fake_popen),
+        patch("src.image_export.shutil.rmtree"),
+        patch("src.image_export.shutil.copy"),
+    ):
+        mock_get_input_files.return_value = [{"path": "test.dd", "id": "1"}]
+        mock_create_task_result.return_value = "task_result"
+
+        extract_task.__class__.run(
+            mock_celery_task,
+            task_config={"filenames": "evil.exe", "calculate_hashes": True},
+            output_path=str(tmp_path),
+            workflow_id="workflow-123",
+        )
+
+    manifests = [
+        c for c in created if c.get("data_type") == "extraction:image_export:hashes"
+    ]
+    assert len(manifests) == 1
+    assert manifests[0]["display_name"] == "hashes.json"
