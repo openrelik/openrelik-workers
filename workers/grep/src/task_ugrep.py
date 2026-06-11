@@ -14,7 +14,11 @@
 
 import subprocess
 
+from celery import signals
+from celery.utils.log import get_task_logger
+
 from openrelik_worker_common.file_utils import create_output_file, count_file_lines
+from openrelik_common.logging import Logger
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 
 import datetime
@@ -30,13 +34,13 @@ TASK_METADATA = {
     "task_config": [
         {
             "name": "pattern",
-            "label": "",
+            "label": "pattern",
             "description": "Pattern to search for (defaults to extended regular expression)",
             "type": "text",
             "required": True,
         },
         {
-            "name": "invert-match",
+            "name": "invert_match",
             "label": "invert match",
             "description": "Selected lines are those not matching any of the specified patterns.",
             "type": "checkbox",
@@ -70,6 +74,18 @@ TASK_METADATA = {
     ],
 }
 
+log_root = Logger()
+logger = log_root.get_logger(__name__, get_task_logger(__name__))
+
+
+@signals.task_prerun.connect
+def on_task_prerun(sender, task_id, task, args, kwargs, **_):
+    log_root.bind(
+        task_id=task_id,
+        task_name=task.name,
+        worker_name=TASK_METADATA.get("display_name"),
+    )
+
 
 @celery.task(bind=True, name=TASK_NAME, metadata=TASK_METADATA)
 def command(
@@ -92,6 +108,11 @@ def command(
     Returns:
         Base64-encoded dictionary containing task results.
     """
+
+    # Setup logger
+    log_root.bind(workflow_id=workflow_id)
+    logger.info(f"Starting {TASK_NAME} for workflow {workflow_id}")
+
     input_files = get_input_files(pipe_result, input_files or [])
     output_files = []
     base_command = prepare_base_command(task_config)
@@ -125,9 +146,6 @@ def command(
                 time.sleep(update_interval_s)
 
         output_files.append(output_file.to_dict())
-
-    if not output_files:
-        raise RuntimeError("Ugrep task yielded no results")
 
     return create_task_result(
         output_files=output_files,
