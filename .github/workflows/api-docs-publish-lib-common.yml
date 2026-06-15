@@ -1,0 +1,60 @@
+name: Publish lib api documentation
+
+# build the documentation new commits on main and PRs
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/openrelik_worker_common/**'
+  workflow_dispatch:
+
+# security: restrict permissions for CI jobs.
+permissions:
+  contents: read
+
+jobs:
+  # Build the documentation and upload the static HTML files as an artifact.
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lib/
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: '3.12'
+
+      # Install all dependencies (including pdoc3)
+      - run: |
+          uv sync --group docs
+      # Build documentation with pdoc3.
+      - run: uv run pdoc3 --html -o docs/ --config='docformat="google"' --force ./openrelik_worker_common
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: lib/docs/
+
+  # Deploy the artifact to GitHub pages.
+  # This is a separate job so that only actions/deploy-pages has the necessary permissions.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lib/
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
