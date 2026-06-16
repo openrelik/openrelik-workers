@@ -1,0 +1,45 @@
+name: Python Tests Lib Common
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/openrelik_worker_common/**'
+  pull_request:
+    paths:
+      - 'lib/openrelik_worker_common/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lib/
+
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install the latest version of uv
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      with:
+        enable-cache: true
+        python-version: ${{ matrix.python-version }}
+    - name: Load NBD kernel module
+      run: |
+        sudo modprobe nbd
+        sudo lsmod
+    - name: Install apt dependencies
+      run: |
+        sudo apt update -y
+        sudo apt install -y qemu-utils john hashcat
+    - name: Install uv dependencies
+      run: |
+        uv sync --all-groups
+    - name: Test with pytest - ${{ matrix.python-version }}
+      run: |
+        uv run pytest --cov=. --cov-branch -v

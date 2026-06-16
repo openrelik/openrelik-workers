@@ -1,0 +1,50 @@
+name: Publish common lib to PyPI (Manual via uv)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (build only, do not publish to PyPI)'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write # Mandatory for Trusted Publishing (OIDC)
+      contents: read
+
+    defaults:
+      run:
+        working-directory: lib/
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install and configure uv
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # uv builds package targets straight into lib/openrelik-worker-common/dist/
+      - name: Build package
+        run: uv build
+
+      # Publishes using the official PyPA action
+      - name: Publish package distributions to PyPI
+        if: ${{ inputs.dry_run == false }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: lib/dist/

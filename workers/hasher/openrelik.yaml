@@ -1,0 +1,12 @@
+# Showcase this worker on https://openrelik.org/marketplace
+publish: true
+
+# Worker Metadata. This section is required.
+display_name: Hasher
+description: Calculate hashes for files.
+
+# Optional: Third-Party Tools Used by the Worker.
+tools:
+  - display_name: SSDeep
+    description: SSDeep (Context-Triggered Piecewise Hashing) is a fuzzy hashing tool that helps identify similar files, even if they're not identical.
+    url: https://ssdeep-project.github.io/ssdeep/index.html
