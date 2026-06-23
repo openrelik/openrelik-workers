@@ -13,7 +13,7 @@ jobs:
     outputs:
       services: ${{ steps.set-services.outputs.services }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Combine filters
         run: awk 1 .github/repos-uv.yaml > combined-repos.yaml
@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set Clean Service Name
         id: vars

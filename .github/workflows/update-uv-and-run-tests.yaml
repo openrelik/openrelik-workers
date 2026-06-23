@@ -10,7 +10,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: set-matrix
         run: |
           SERVICES=$(find . -name "uv.lock" | xargs -n 1 dirname | jq -R . | jq -s -c .)
@@ -30,16 +30,16 @@ jobs:
         working-directory: ${{ matrix.service }}
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v5 
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
       with:
         enable-cache: true
         cache-dependency-glob: "${{ matrix.service }}/uv.lock"
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
    
     - name: Upgrade Python dependencies with uv
       run: uv lock --upgrade
