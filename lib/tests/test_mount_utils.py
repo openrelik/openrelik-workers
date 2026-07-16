@@ -663,7 +663,7 @@ class Utils(unittest.TestCase):
             self.assertEqual(
                 cm.output,
                 [
-                    "WARNING:openrelik_worker_common.mount_utils:Ignoring partition test_partition_name as fs type not available!"
+                    "WARNING:openrelik_worker_common.mount_utils:Ignoring partition /dev/test_partition_name as fs type not available!"
                 ],
             )
 

@@ -531,7 +531,7 @@ class BlockDevice:
             )
             return False
 
-        if not self._is_important_partition(partition['name']):
+        if not self._is_supported_fs(f"/dev/{partition['name']}"):
             return False
 
         return True
