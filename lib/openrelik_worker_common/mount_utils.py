@@ -422,8 +422,6 @@ class BlockDevice:
         Returns:
             tuple: tuple of return bool and error message
         """
-        os.environ["PATH"] += os.pathsep + "/usr/sbin"
-
         tools = ["lsblk", "blkid", "mount", "qemu-nbd", "sudo", "fdisk", "ntfsinfo"]
         missing_tools = [tool for tool in tools if not shutil.which(tool)]
 
