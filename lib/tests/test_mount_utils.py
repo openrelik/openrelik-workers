@@ -178,6 +178,14 @@ class Utils(unittest.TestCase):
             "image_path does not exist: imagedoesnotexist",
         )
 
+    def test_MountLVM2Mempber(self):
+        bd = mount_utils.BlockDevice("./test_data/image_lvm2.img")
+        bd.setup()
+        bd.mountroot = self.mountroot
+        bd.mount()
+
+        bd.umount()
+
     def test_MountNoPartitions(self):
         bd = mount_utils.BlockDevice("./test_data/image_without_partitions.img")
         bd.setup()

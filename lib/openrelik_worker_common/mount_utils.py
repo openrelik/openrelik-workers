@@ -270,7 +270,7 @@ class BlockDevice:
             logger.error(
                 f"qemu-nbd: failed creating {self.blkdevice} for {self.image_path}: {process.stderr} {process.stdout}"
             )
-            raise RuntimeError(
+            raise RuntimeError
                 f"Error running qemu-nbd: {process.stderr} {process.stdout}"
             )
 
@@ -569,7 +569,8 @@ class BlockDevice:
             to_mount.append(partition_name)
         elif not self.partitions:
             # No partitions found, mount the whole block device
-            to_mount.append(self.blkdevice)
+            if _is_important_partition(self.blkdevice):
+                to_mount.append(self.blkdevice)
         elif self.partitions:
             # Mount all detected partitions
             to_mount = self.partitions
@@ -617,6 +618,7 @@ class BlockDevice:
             logger.info(f"Trying to mount {mounttarget}")
             mount_command = ["sudo", "mount"]
             fstype = self._get_fstype(mounttarget)
+
             if fstype == "xfs":
                 mount_command.extend(["-o", "ro,norecovery"])
             elif fstype in ["ext2", "ext3", "ext4"]:
