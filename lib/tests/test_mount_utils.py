@@ -182,8 +182,11 @@ class Utils(unittest.TestCase):
         bd = mount_utils.BlockDevice("./test_data/image_lvm2.img")
         bd.setup()
         bd.mountroot = self.mountroot
+        # "LVM2_member" fstype is not in the list of partitions, see FR at
+        # https://github.com/openrelik/openrelik-workers/issues/201
+        # So nothing is mounted from this test image.
         bd.mount()
-
+        self.assertEqual(bd.mountpoints, [])
         bd.umount()
 
     def test_MountNoPartitions(self):
