@@ -53,7 +53,7 @@ class Utils(unittest.TestCase):
         bd.setup()
         self.assertEqual(
             str(bd.blkdeviceinfo),
-            "{'blockdevices': [{'name': 'loop0', 'maj:min': '7:0', 'rm': False, 'size': 1048576, 'ro': True, 'type': 'loop', 'mountpoints': [None]}]}",
+            "{'blockdevices': [{'name': 'loop0', 'maj:min': '7:0', 'rm': False, 'size': 1048576, 'ro': True, 'type': 'loop', 'mountpoints': []}]}",
         )
 
     @patch("openrelik_worker_common.mount_utils.BlockDevice._losetup")
@@ -178,7 +178,7 @@ class Utils(unittest.TestCase):
             "image_path does not exist: imagedoesnotexist",
         )
 
-    def test_MountLVM2Mempber(self):
+    def test_MountLVM2Member(self):
         bd = mount_utils.BlockDevice("./test_data/image_lvm2.img")
         bd.setup()
         bd.mountroot = self.mountroot

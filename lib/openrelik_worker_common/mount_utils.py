@@ -270,7 +270,7 @@ class BlockDevice:
             logger.error(
                 f"qemu-nbd: failed creating {self.blkdevice} for {self.image_path}: {process.stderr} {process.stdout}"
             )
-            raise RuntimeError
+            raise RuntimeError(
                 f"Error running qemu-nbd: {process.stderr} {process.stdout}"
             )
 
@@ -422,6 +422,8 @@ class BlockDevice:
         Returns:
             tuple: tuple of return bool and error message
         """
+        os.environ["PATH"] += os.pathsep + "/usr/sbin"
+
         tools = ["lsblk", "blkid", "mount", "qemu-nbd", "sudo", "fdisk", "ntfsinfo"]
         missing_tools = [tool for tool in tools if not shutil.which(tool)]
 
@@ -487,6 +489,31 @@ class BlockDevice:
 
         return partitions
 
+    def _is_supported_fs(self, devname: str):
+        """Returns True if the path points to a block device that contains a filesystem of supported type.
+
+        Args:
+            devname (str): block device or partitions device name.
+            
+        Returns:
+            boolean: True if the fstype is supported
+
+        """
+        fs_type = self._get_fstype(devname)
+        if fs_type == "":
+            logger.warning(
+                f"Ignoring partition {devname} as fs type not available!"
+            )
+            return False
+
+        if fs_type not in self.supported_fstypes:
+            logger.warning(
+                f"Ignoring partition {devname} as fs type {fs_type} not supported!"
+            )
+            return False
+
+        return True
+
     def _is_important_partition(self, partition: dict):
         """Decides if we will process a partition. We process the partition if:
         * > 100Mbyte in size
@@ -503,17 +530,8 @@ class BlockDevice:
                 f"Ignoring partion {partition['name']} as size < {self.min_partition_size}"
             )
             return False
-        fs_type = self._get_fstype(f"/dev/{partition['name']}")
-        if fs_type == "":
-            logger.warning(
-                f"Ignoring partition {partition['name']} as fs type not available!"
-            )
-            return False
 
-        if fs_type not in self.supported_fstypes:
-            logger.warning(
-                f"Ignoring partition {partition['name']} as fs type {fs_type} not supported!"
-            )
+        if not self._is_important_partition(partition['name']):
             return False
 
         return True
@@ -569,7 +587,7 @@ class BlockDevice:
             to_mount.append(partition_name)
         elif not self.partitions:
             # No partitions found, mount the whole block device
-            if _is_important_partition(self.blkdevice):
+            if self._is_supported_fs(self.blkdevice):
                 to_mount.append(self.blkdevice)
         elif self.partitions:
             # Mount all detected partitions
