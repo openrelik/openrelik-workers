@@ -451,26 +451,26 @@ def test_upload_happy_path(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "source, basename, expected",
+    "source, identifier, expected",
     [
         (None, "evidence", None),
         ("", "evidence", None),
         ("   ", "evidence", None),
         ("static-source", "evidence", "static-source"),
-        ("{basename}", "evidence", "evidence"),
-        ("{basename}_2024-01", "evidence", "evidence_2024-01"),
-        # {basename} requested but no value provided -> fall back to per-file name.
-        ("{basename}", None, None),
-        ("{basename}", "  ", None),
+        ("{identifier}", "evidence", "evidence"),
+        ("{identifier}_2024-01", "evidence", "evidence_2024-01"),
+        # {identifier} requested but no value -> fall back to per-file name.
+        ("{identifier}", None, None),
+        ("{identifier}", "  ", None),
     ],
 )
-def test_resolve_source(source, basename, expected):
-    assert tasks._resolve_source(source, basename) == expected
+def test_resolve_source(source, identifier, expected):
+    assert tasks._resolve_source(source, identifier) == expected
 
 
 def test_upload_passes_resolved_source_to_uploader(tmp_path, monkeypatch):
-    """The {basename} placeholder in 'source' is resolved from export_basename
-    and handed to the uploader as the Splunk source."""
+    """The {identifier} placeholder in 'source' is resolved from
+    identifier and handed to the uploader as the Splunk source."""
     path = _write_jsonl(tmp_path, [{"n": 1}])
 
     monkeypatch.setenv("SPLUNK_HEC_URL", "https://hec.example.com")
@@ -494,8 +494,8 @@ def test_upload_passes_resolved_source_to_uploader(tmp_path, monkeypatch):
         workflow_id="wf",
         task_config={
             "index": "idx",
-            "source": "{basename}_2024-01",
-            "export_basename": "evidence",
+            "source": "{identifier}_2024-01",
+            "identifier": "evidence",
         },
     )
 

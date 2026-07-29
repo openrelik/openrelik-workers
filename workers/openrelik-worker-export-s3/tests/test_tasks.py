@@ -128,8 +128,8 @@ def test_upload_gzip_uses_original_path_basename(tmp_path):
 
 
 @mock_aws
-def test_object_name_pattern_basename_with_extension(tmp_path):
-    """An object_name pattern + export_basename names the key after the source
+def test_object_name_pattern_identifier_with_extension(tmp_path):
+    """An object_name pattern + identifier names the key after the source
     artifact, keeping the uploaded file's own extension."""
     _create_bucket()
     inputs = [
@@ -148,8 +148,8 @@ def test_object_name_pattern_basename_with_extension(tmp_path):
         task_config={
             "s3_bucket": "test-bucket",
             "s3_prefix": "case-1",
-            "object_name": "{basename}",
-            "export_basename": "evidence",
+            "object_name": "{identifier}",
+            "identifier": "evidence",
         },
     )
     result = _decode(raw)
@@ -162,7 +162,7 @@ def test_object_name_pattern_basename_with_extension(tmp_path):
 
 @mock_aws
 def test_object_name_pattern_with_slice_distinguisher(tmp_path):
-    """A pattern that wraps {basename} keeps multiple export tasks from
+    """A pattern that wraps {identifier} keeps multiple export tasks from
     colliding — the distinguisher lives in the template, not the importer."""
     _create_bucket()
     inputs = [_make_input(tmp_path, "uuid.csv", b"slice", display_name="uuid.csv")]
@@ -172,8 +172,8 @@ def test_object_name_pattern_with_slice_distinguisher(tmp_path):
         workflow_id="wf-slice",
         task_config={
             "s3_bucket": "test-bucket",
-            "object_name": "{basename}_2024-01",
-            "export_basename": "evidence",
+            "object_name": "{identifier}_2024-01",
+            "identifier": "evidence",
         },
     )
     result = _decode(raw)
@@ -181,9 +181,10 @@ def test_object_name_pattern_with_slice_distinguisher(tmp_path):
 
 
 @mock_aws
-def test_object_name_pattern_without_basename_value_falls_back(tmp_path):
-    """A pattern referencing {basename} with no export_basename provided falls
-    back to the upstream name rather than emitting a literal '{basename}'."""
+def test_object_name_pattern_without_identifier_falls_back(tmp_path):
+    """A pattern referencing {identifier} with no value provided falls
+    back to the upstream name rather than emitting a literal
+    '{identifier}'."""
     _create_bucket()
     inputs = [
         _make_input(
@@ -198,7 +199,7 @@ def test_object_name_pattern_without_basename_value_falls_back(tmp_path):
     raw = tasks.upload(
         input_files=inputs,
         workflow_id="wf-noval",
-        task_config={"s3_bucket": "test-bucket", "object_name": "{basename}"},
+        task_config={"s3_bucket": "test-bucket", "object_name": "{identifier}"},
     )
     result = _decode(raw)
     assert result["meta"]["uploaded_objects"][0]["key"] == "uuid.csv"
@@ -216,8 +217,8 @@ def test_object_name_pattern_applies_before_gzip_suffix(tmp_path):
         task_config={
             "s3_bucket": "test-bucket",
             "compression": "gzip",
-            "object_name": "{basename}",
-            "export_basename": "evidence",
+            "object_name": "{identifier}",
+            "identifier": "evidence",
         },
     )
     result = _decode(raw)

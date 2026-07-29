@@ -64,22 +64,22 @@ TASK_METADATA = {
             "name": "source",
             "label": "Source override",
             "description": (
-                "Optional source field. The '{basename}' placeholder is replaced "
-                "with the source artifact name supplied via 'Source basename'; "
-                "add a distinguisher around it (e.g. '{basename}_2024-01') to "
-                "keep multiple export tasks from sharing one source. Defaults to "
-                "the input display name."
+                "Optional Splunk 'source' field. Use '{identifier}' to insert "
+                "the value from 'Source identifier value'; add text around it (e.g. "
+                "'{identifier}_2024-01') to keep multiple export tasks from "
+                "sharing one source. Defaults to the input display name."
             ),
             "type": "text",
             "required": False,
         },
         {
-            "name": "export_basename",
-            "label": "Source basename",
+            "name": "identifier",
+            "label": "Source identifier value",
             "description": (
-                "Value substituted into '{basename}' in the source override. "
-                "Typically injected per-import by an importer (param_name "
-                "'export_basename') rather than set by hand."
+                "A value to insert into the '{identifier}' placeholder in the "
+                "source override — e.g. the original filename, a case ID, or a "
+                "hostname. An importer can set this automatically (param_name "
+                "'identifier'); otherwise enter it by hand."
             ),
             "type": "text",
             "required": False,
@@ -100,25 +100,23 @@ TASK_METADATA = {
 }
 
 
-def _resolve_source(source: str | None, basename: str | None) -> str | None:
-    """Resolve the Splunk 'source' override, substituting '{basename}'.
+def _resolve_source(source: str | None, identifier: str | None) -> str | None:
+    """Resolve the Splunk 'source' override, substituting '{identifier}'.
 
-    Returns the override with '{basename}' replaced by ``basename`` (the source
-    artifact name, typically injected per-import). A pattern that references
-    '{basename}' with no value provided collapses to ``None`` so the caller
-    falls back to the per-file display name rather than emitting a literal
-    '{basename}' source. Unlike the S3 object name, no extension is appended —
-    a Splunk source is a label, not a filename.
+    Returns the override with '{identifier}' replaced by ``identifier`` (a
+    meaningful identifier such as the original filename, typically injected
+    per-import). A pattern that references '{identifier}' with no value provided
+    collapses to ``None`` so the caller falls back to the per-file display name
+    rather than emitting a literal '{identifier}' source. Unlike the S3 object
+    name, no extension is appended — a Splunk source is a label, not a filename.
     """
     source = (source or "").strip()
-    if not source:
+    identifier = (identifier or "").strip()
+    # No override, or a {identifier} override with no value to fill it: fall
+    # back (None) rather than emit a literal placeholder.
+    if not source or ("{identifier}" in source and not identifier):
         return None
-    if "{basename}" in source:
-        basename = (basename or "").strip()
-        if not basename:
-            return None
-        source = source.replace("{basename}", basename)
-    return source
+    return source.replace("{identifier}", identifier)
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -149,7 +147,9 @@ def upload(
     Returns:
         Base64-encoded dictionary containing task results.
     """
-    input_files = get_input_files(pipe_result, input_files or [], filter=COMPATIBLE_INPUTS)
+    input_files = get_input_files(
+        pipe_result, input_files or [], filter=COMPATIBLE_INPUTS
+    )
     task_config = task_config or {}
 
     if not input_files:
@@ -157,15 +157,21 @@ def upload(
             output_files=[],
             workflow_id=workflow_id,
             command="Splunk HEC upload",
-            meta={"warnings": "No supported input files provided. Expected *.jsonl or *.json_line files."},
+            meta={
+                "warnings": "No supported input files provided. Expected *.jsonl or *.json_line files."
+            },
         )
 
     hec_url = os.environ.get("SPLUNK_HEC_URL")
     hec_token = os.environ.get("SPLUNK_HEC_TOKEN")
     if not hec_url:
-        raise RuntimeError("SPLUNK_HEC_URL environment variable is not set on the worker.")
+        raise RuntimeError(
+            "SPLUNK_HEC_URL environment variable is not set on the worker."
+        )
     if not hec_token:
-        raise RuntimeError("SPLUNK_HEC_TOKEN environment variable is not set on the worker.")
+        raise RuntimeError(
+            "SPLUNK_HEC_TOKEN environment variable is not set on the worker."
+        )
     verify_tls = _bool_env("SPLUNK_HEC_VERIFY_TLS", default=True)
 
     index = task_config.get("index")
@@ -175,7 +181,7 @@ def upload(
     endpoint = task_config.get("hec_endpoint") or "raw"
     host = task_config.get("host")
     source_override = _resolve_source(
-        task_config.get("source"), task_config.get("export_basename")
+        task_config.get("source"), task_config.get("identifier")
     )
 
     total_files = len(input_files)
@@ -257,7 +263,9 @@ def upload(
     )
 
 
-def _make_progress_cb(task, display_name: str, file_index: int, total_files: int, index: str):
+def _make_progress_cb(
+    task, display_name: str, file_index: int, total_files: int, index: str
+):
     """Build an async progress callback that forwards uploader stats to the UI."""
 
     async def _cb(progress: UploadProgress) -> None:

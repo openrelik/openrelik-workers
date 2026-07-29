@@ -67,23 +67,23 @@ TASK_METADATA = {
             "label": "Object name pattern",
             "description": (
                 "Optional name for the uploaded object (the file portion of the "
-                "S3 key, joined under 'S3 key prefix'). The '{basename}' "
-                "placeholder is replaced with the source artifact name supplied "
-                "via 'Source basename' — set a distinguisher around it (e.g. "
-                "'{basename}_2024-01') to keep multiple export tasks from "
-                "colliding. The uploaded file's extension is appended "
-                "automatically. Leave blank to use the upstream filename."
+                "S3 key, joined under 'S3 key prefix'). Use '{identifier}' to "
+                "insert the value from 'Object name identifier value' — add text "
+                "around it (e.g. '{identifier}_2024-01') to keep multiple export "
+                "tasks from overwriting each other. The uploaded file's extension "
+                "is added automatically. Leave blank to use the upstream filename."
             ),
             "type": "text",
             "required": False,
         },
         {
-            "name": "export_basename",
-            "label": "Source basename",
+            "name": "identifier",
+            "label": "Object name identifier value",
             "description": (
-                "Value substituted into '{basename}' in the object name pattern. "
-                "Typically injected per-import by an importer (param_name "
-                "'export_basename') rather than set by hand."
+                "A value to insert into the '{identifier}' placeholder in the "
+                "object name pattern — e.g. the original filename, a case ID, or "
+                "a hostname. An importer can set this automatically (param_name "
+                "'identifier'); otherwise enter it by hand."
             ),
             "type": "text",
             "required": False,
@@ -105,22 +105,23 @@ def _file_extension(input_file: dict) -> str:
 
 
 def _resolve_object_name(
-    pattern: str, basename: str, input_file: dict, fallback: str
+    pattern: str, identifier: str, input_file: dict, fallback: str
 ) -> str:
     """Build the object name from a user pattern, or fall back to ``fallback``.
 
-    When ``pattern`` is set, ``{basename}`` is substituted with ``basename`` and
-    the upload file's own extension is appended. A pattern that references
-    ``{basename}`` without a value provided is treated as unset so callers fall
-    back rather than emit a literal '{basename}' key.
+    When ``pattern`` is set, ``{identifier}`` is substituted with
+    ``identifier`` (a meaningful identifier such as the original
+    filename, typically injected by an importer into the task config),
+    and the upload file's own extension is appended. A pattern that references
+    ``{identifier}`` without a value provided is treated as unset so callers
+    fall back rather than emit a literal '{identifier}' key.
     """
     pattern = (pattern or "").strip()
-    if not pattern:
+    # No pattern, or a {identifier} pattern with no value to fill it: fall back
+    # rather than emit a literal placeholder.
+    if not pattern or ("{identifier}" in pattern and not identifier):
         return fallback
-    if "{basename}" in pattern:
-        if not basename:
-            return fallback
-        pattern = pattern.replace("{basename}", basename)
+    pattern = pattern.replace("{identifier}", identifier or "")
     return f"{pattern}{_file_extension(input_file)}"
 
 
@@ -184,7 +185,7 @@ def upload(
         raise ValueError("task_config['s3_bucket'] is required.")
     prefix = _safe_key_segment(task_config.get("s3_prefix") or "")
     object_name_pattern = task_config.get("object_name") or ""
-    export_basename = task_config.get("export_basename") or ""
+    identifier = task_config.get("identifier") or ""
     compression = task_config.get("compression") or "none"
     if compression not in VALID_COMPRESSION:
         raise ValueError(
@@ -222,11 +223,12 @@ def upload(
         fallback_name = (
             os.path.basename(original_path) if original_path else display_name
         )
-        # An object-name pattern (with {basename} from export_basename) wins over
-        # the upstream name — this is how the original artifact name survives a
-        # pipeline that has otherwise reduced everything to UUIDs.
+        # An object-name pattern (with {identifier}) wins over the upstream
+        # name — this is how a meaningful identifier (e.g. the original artifact
+        # name) survives a pipeline that has otherwise reduced everything to
+        # UUIDs.
         source_name = _resolve_object_name(
-            object_name_pattern, export_basename, input_file, fallback_name
+            object_name_pattern, identifier, input_file, fallback_name
         )
         safe_name = _safe_key_segment(source_name)
         if not safe_name:
@@ -268,9 +270,7 @@ def upload(
             logger.exception(
                 "S3 upload failed for %s -> s3://%s/%s", display_name, bucket, key
             )
-            failed.append(
-                {"display_name": display_name, "key": key, "error": str(exc)}
-            )
+            failed.append({"display_name": display_name, "key": key, "error": str(exc)})
         finally:
             if cleanup_path:
                 _unlink_quiet(cleanup_path)
