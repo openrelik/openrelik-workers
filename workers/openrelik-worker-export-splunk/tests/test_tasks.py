@@ -457,11 +457,11 @@ def test_upload_happy_path(tmp_path, monkeypatch):
         ("", "evidence", None),
         ("   ", "evidence", None),
         ("static-source", "evidence", "static-source"),
-        ("{identifier}", "evidence", "evidence"),
-        ("{identifier}_2024-01", "evidence", "evidence_2024-01"),
-        # {identifier} requested but no value -> fall back to per-file name.
-        ("{identifier}", None, None),
-        ("{identifier}", "  ", None),
+        ("{splunk_identifier}", "evidence", "evidence"),
+        ("{splunk_identifier}_2024-01", "evidence", "evidence_2024-01"),
+        # {splunk_identifier} requested but no value -> fall back to per-file name.
+        ("{splunk_identifier}", None, None),
+        ("{splunk_identifier}", "  ", None),
     ],
 )
 def test_resolve_source(source, identifier, expected):
@@ -469,8 +469,8 @@ def test_resolve_source(source, identifier, expected):
 
 
 def test_upload_passes_resolved_source_to_uploader(tmp_path, monkeypatch):
-    """The {identifier} placeholder in 'source' is resolved from
-    identifier and handed to the uploader as the Splunk source."""
+    """The {splunk_identifier} placeholder in 'source' is resolved from
+    splunk_identifier and handed to the uploader as the Splunk source."""
     path = _write_jsonl(tmp_path, [{"n": 1}])
 
     monkeypatch.setenv("SPLUNK_HEC_URL", "https://hec.example.com")
@@ -494,8 +494,8 @@ def test_upload_passes_resolved_source_to_uploader(tmp_path, monkeypatch):
         workflow_id="wf",
         task_config={
             "index": "idx",
-            "source": "{identifier}_2024-01",
-            "identifier": "evidence",
+            "source": "{splunk_identifier}_2024-01",
+            "splunk_identifier": "evidence",
         },
     )
 

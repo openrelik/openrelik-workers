@@ -64,22 +64,24 @@ TASK_METADATA = {
             "name": "source",
             "label": "Source override",
             "description": (
-                "Optional Splunk 'source' field. Use '{identifier}' to insert "
+                "Optional Splunk 'source' field. Use '{splunk_identifier}' to insert "
                 "the value from 'Source identifier value'; add text around it (e.g. "
-                "'{identifier}_2024-01') to keep multiple export tasks from "
+                "'{splunk_identifier}_2024-01') to keep multiple export tasks from "
                 "sharing one source. Defaults to the input display name."
             ),
             "type": "text",
             "required": False,
         },
         {
-            "name": "identifier",
+            "name": "splunk_identifier",
             "label": "Source identifier value",
             "description": (
-                "A value to insert into the '{identifier}' placeholder in the "
+                "A value to insert into the '{splunk_identifier}' placeholder in the "
                 "source override — e.g. the original filename, a case ID, or a "
                 "hostname. An importer can set this automatically (param_name "
-                "'identifier'); otherwise enter it by hand."
+                "'splunk_identifier', unique to this task so it never collides "
+                "with another exporter's identifier field); otherwise enter it "
+                "by hand."
             ),
             "type": "text",
             "required": False,
@@ -101,22 +103,23 @@ TASK_METADATA = {
 
 
 def _resolve_source(source: str | None, identifier: str | None) -> str | None:
-    """Resolve the Splunk 'source' override, substituting '{identifier}'.
+    """Resolve the Splunk 'source' override, substituting '{splunk_identifier}'.
 
-    Returns the override with '{identifier}' replaced by ``identifier`` (a
-    meaningful identifier such as the original filename, typically injected
-    per-import). A pattern that references '{identifier}' with no value provided
-    collapses to ``None`` so the caller falls back to the per-file display name
-    rather than emitting a literal '{identifier}' source. Unlike the S3 object
-    name, no extension is appended — a Splunk source is a label, not a filename.
+    Returns the override with '{splunk_identifier}' replaced by ``identifier``
+    (a meaningful identifier such as the original filename, typically injected
+    per-import). A pattern that references '{splunk_identifier}' with no value
+    provided collapses to ``None`` so the caller falls back to the per-file
+    display name rather than emitting a literal '{splunk_identifier}' source.
+    Unlike the S3 object name, no extension is appended — a Splunk source is a
+    label, not a filename.
     """
     source = (source or "").strip()
     identifier = (identifier or "").strip()
-    # No override, or a {identifier} override with no value to fill it: fall
-    # back (None) rather than emit a literal placeholder.
-    if not source or ("{identifier}" in source and not identifier):
+    # No override, or a {splunk_identifier} override with no value to fill it:
+    # fall back (None) rather than emit a literal placeholder.
+    if not source or ("{splunk_identifier}" in source and not identifier):
         return None
-    return source.replace("{identifier}", identifier)
+    return source.replace("{splunk_identifier}", identifier)
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -181,7 +184,7 @@ def upload(
     endpoint = task_config.get("hec_endpoint") or "raw"
     host = task_config.get("host")
     source_override = _resolve_source(
-        task_config.get("source"), task_config.get("identifier")
+        task_config.get("source"), task_config.get("splunk_identifier")
     )
 
     total_files = len(input_files)
