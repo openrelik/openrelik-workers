@@ -37,21 +37,27 @@ log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
 
 
+_cached_records = None
+
+
 def load_test_dataframe() -> pd.DataFrame:
     """Loads SSH log file and returns dataframe."""
-    log_file = os.path.join("test_data", "secure")
-    if not os.path.exists(log_file):
-        raise Exception(f"Log file {log_file} does not exist.")
+    global _cached_records
+    if _cached_records is None:
+        log_file = os.path.join("test_data", "secure")
+        if not os.path.exists(log_file):
+            raise Exception(f"Log file {log_file} does not exist.")
 
-    with open(log_file, "r", encoding="utf-8") as fh:
-        data = fh.read()
-    analyzer = LinuxSSHAnalysisTask()
-    ssh_records = analyzer.parse_log_data(data, log_file, log_year=2022)
+        with open(log_file, "r", encoding="utf-8") as fh:
+            data = fh.read()
+        analyzer = LinuxSSHAnalysisTask()
+        ssh_records = analyzer.parse_log_data(data, log_file, log_year=2022)
 
-    records = []
-    for ssh_record in ssh_records:
-        records.append(ssh_record.__dict__)
-    return pd.DataFrame(records)
+        _cached_records = []
+        for ssh_record in ssh_records:
+            _cached_records.append(ssh_record.__dict__)
+
+    return pd.DataFrame([dict(d) for d in _cached_records])
 
 
 @pytest.mark.skipif(

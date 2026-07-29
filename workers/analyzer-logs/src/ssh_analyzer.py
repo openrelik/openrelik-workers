@@ -175,6 +175,30 @@ class LinuxSSHAnalysisTask:
         "disconnected": _DISCONNECT_GRAMMAR,
     }
 
+    _COMMON_PREFIX = (
+        r"^(?P<datetime>(?:\w{3}\s+\d+\s+\d{2}:\d{2}:\d{2})|(?:\S+))\s+"
+        r"(?P<hostname>\S+)\s+sshd\[(?P<pid>\d+)\]:\s+"
+    )
+
+    _REGEX_ACCEPTED = re.compile(
+        _COMMON_PREFIX + r"Accepted\s+(?P<auth_method>password|publickey)\s+for\s+"
+        r"(?P<username>\S+)\s+from\s+(?P<source_ip>\S+)\s+port\s+"
+        r"(?P<source_port>\d+)\s+(?P<protocol>\S+)"
+        r"(?:\s+(?P<fingerprint_type>\w+)\s+(?P<fingerprint>\S+))?$"
+    )
+
+    _REGEX_FAILED = re.compile(
+        _COMMON_PREFIX + r"Failed\s+(?P<auth_method>password|publickey)\s+for\s+"
+        r"(?:invalid\s+user\s+)?(?P<username>\S+)\s+from\s+(?P<source_ip>\S+)\s+"
+        r"port\s+(?P<source_port>\d+)\s+(?P<protocol>\S+)"
+    )
+
+    _REGEX_DISCONNECTED = re.compile(
+        _COMMON_PREFIX
+        + r"Disconnected\s+from\s+user\s+(?P<username>\S+)\s+(?P<source_ip>\S+)\s+"
+        r"port\s+(?P<source_port>\d+)"
+    )
+
     def __init__(self, log_year=None):
         self.log_year = log_year
 
@@ -337,57 +361,62 @@ class LinuxSSHAnalysisTask:
                 log.debug("SSH message type not set")
                 continue
 
-            for key, value in self.MESSAGE_GRAMMAR.items():
-                if key.lower() == sshd_message_type.lower():
-                    try:
-                        parsed_ssh_event = value.parse_string(line)
+            sshd_message_type_lower = sshd_message_type.lower()
+            if sshd_message_type_lower not in ("accepted", "failed", "disconnected"):
+                continue
 
-                        # handle date/time
-                        dt_object = self.parse_message_datetime(
-                            parsed_ssh_event.datetime, log_year
-                        )
-                        if not dt_object:
-                            log.error("Error extracting date/time from %s", line)
-                            continue
-                        event_date = dt_object.strftime("%Y-%m-%d")
-                        event_time = dt_object.strftime("%H:%M:%S")
-                        event_timestamp = dt_object.timestamp()
+            if sshd_message_type_lower == "accepted":
+                match = self._REGEX_ACCEPTED.match(line)
+                if not match:
+                    continue
+                gd = match.groupdict()
+                event_type = "authentication"
+                auth_result = "success"
+                auth_method = gd["auth_method"]
+            elif sshd_message_type_lower == "failed":
+                match = self._REGEX_FAILED.match(line)
+                if not match:
+                    continue
+                gd = match.groupdict()
+                event_type = "authentication"
+                auth_result = "failure"
+                auth_method = gd["auth_method"]
+            elif sshd_message_type_lower == "disconnected":
+                match = self._REGEX_DISCONNECTED.match(line)
+                if not match:
+                    continue
+                gd = match.groupdict()
+                event_type = "disconnection"
+                auth_result = ""
+                auth_method = ""
 
-                        # event_type and auth_result
-                        if key.lower() == "accepted":
-                            event_type = "authentication"
-                            auth_result = "success"
-                        elif key.lower() == "failed":
-                            event_type = "authentication"
-                            auth_result = "failure"
-                        elif key.lower() == "disconnected":
-                            event_type = "disconnection"
-                            auth_result = ""
-                        else:
-                            event_type = "unknown"
-                            auth_result = ""
+            # handle date/time
+            dt_object = self.parse_message_datetime(gd["datetime"].split(), log_year)
+            if not dt_object:
+                log.error("Error extracting date/time from %s", line)
+                continue
+            event_date = dt_object.strftime("%Y-%m-%d")
+            event_time = dt_object.strftime("%H:%M:%S")
+            event_timestamp = dt_object.timestamp()
 
-                        ssh_event_data = SSHEventData(
-                            timestamp=event_timestamp,
-                            date=event_date,
-                            time=event_time,
-                            hostname=parsed_ssh_event.hostname,
-                            pid=parsed_ssh_event.pid,
-                            event_key=event_type,
-                            event_type=event_type,
-                            auth_method=parsed_ssh_event.auth_method,
-                            auth_result=auth_result,
-                            username=parsed_ssh_event.username,
-                            source_hostname="",
-                            source_ip=parsed_ssh_event.source_ip,
-                            source_port=parsed_ssh_event.source_port,
-                        )
-                        ssh_event_data.calculate_session_id()
+            ssh_event_data = SSHEventData(
+                timestamp=event_timestamp,
+                date=event_date,
+                time=event_time,
+                hostname=gd["hostname"],
+                pid=gd["pid"],
+                event_key=event_type,
+                event_type=event_type,
+                auth_method=auth_method,
+                auth_result=auth_result,
+                username=gd["username"],
+                source_hostname="",
+                source_ip=gd["source_ip"],
+                source_port=gd["source_port"],
+            )
+            ssh_event_data.calculate_session_id()
 
-                        ssh_records.append(ssh_event_data)
-                    except pyparsing.ParseException as e:
-                        # log.debug("Pyparsing parsing exception: %s", {str(e)})
-                        continue
+            ssh_records.append(ssh_event_data)
 
         log.info("Total number of SSH records %d in %s", len(ssh_records), log_filename)
         return ssh_records

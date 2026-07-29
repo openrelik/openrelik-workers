@@ -7,6 +7,7 @@ requires-python = ">=3.12,<4"
 readme = "README.md"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
+    "openrelik-common>=0.7.7",
     "openrelik-worker-common>=0.17",
     "timesketch-api-client>=20260312",
     "timesketch-import-client>=20230721",

@@ -296,14 +296,15 @@ def command(
 
         cmd = ["fraken"] + folders_and_files + [f"{all_yara.path}"]
         logger.debug(f"fraken-x command: {cmd}")
-        with open(fraken_output.path, "w+", encoding="utf-8") as log:
-            self.send_event("task-progress")
-            process = subprocess.Popen(cmd, stdout=log, stderr=subprocess.PIPE)
-            process.wait()
-            if process.stderr:
-                # Note: fraken-x uses the eprintln! Rust macro to print progress,
-                #       this outputs to stderr....
-                logger.info(f"fraken-x: {process.stderr.readlines()}")
+        self.send_event("task-progress")
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        if result.stdout:
+            with open(fraken_output.path, "wb") as f:
+                f.write(result.stdout)
+        if result.stderr:
+            # Note: fraken-x uses the eprintln! Rust macro to print progress,
+            #       this outputs to stderr....
+            logger.info(f"fraken-x: {result.stderr.splitlines()}")
     except RuntimeError as e:
         logger.error("Error encountered: %s", str(e))
     finally:

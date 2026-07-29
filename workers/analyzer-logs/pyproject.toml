@@ -29,3 +29,9 @@ default-groups = []
 testpaths = ["tests"]
 python_files = ["tests.py", "test_*.py"]
 pythonpath = [".", "src"]
+
+[tool.coverage.run]
+omit = [
+    "tests/*",
+    "**/__init__.py"
+]

@@ -165,7 +165,7 @@ def test_generate_report_from_matches():
 
 
 @patch("src.tasks.command.send_event")
-@patch("src.tasks.subprocess.Popen")
+@patch("subprocess.run")
 @patch("src.tasks.create_task_result")
 @patch("src.tasks.create_output_file")
 @patch("src.tasks.is_disk_image")
@@ -173,7 +173,7 @@ def test_command_success(
     mock_is_disk_image,
     mock_create_output_file,
     mock_create_task_result,
-    mock_popen,
+    mock_run,
     mock_send_event,
     tmp_path,
 ):
@@ -194,10 +194,11 @@ def test_command_success(
 
     mock_create_output_file.side_effect = side_effect_create_output_file
 
-    # Setup mock Popen
-    mock_process = MagicMock()
-    mock_process.stderr.readlines.return_value = []
-    mock_popen.return_value = mock_process
+    # Setup mock run
+    mock_result = MagicMock()
+    mock_result.stdout = b'[{"ImagePath": "file1.txt", "SHA256": "hash", "Signature": "rule", "Description": "desc", "Reference": "ref", "Score": 100}]\n'
+    mock_result.stderr = b""
+    mock_run.return_value = mock_result
 
     mock_create_task_result.return_value = "mock_result"
 
@@ -220,12 +221,12 @@ def test_command_success(
     )
 
     assert result == "mock_result"
-    mock_popen.assert_called_once()
+    mock_run.assert_called_once()
     mock_create_task_result.assert_called_once()
 
 
 @patch("src.tasks.command.send_event")
-@patch("src.tasks.subprocess.Popen")
+@patch("subprocess.run")
 @patch("src.tasks.create_task_result")
 @patch("src.tasks.create_output_file")
 @patch("src.tasks.BlockDevice")
@@ -235,7 +236,7 @@ def test_command_with_disk_image(
     mock_block_device,
     mock_create_output_file,
     mock_create_task_result,
-    mock_popen,
+    mock_run,
     mock_send_event,
     tmp_path,
 ):
@@ -258,10 +259,11 @@ def test_command_with_disk_image(
     mock_bd_instance.mount.return_value = [str(tmp_path / "mount1")]
     mock_block_device.return_value = mock_bd_instance
 
-    # Setup mock Popen
-    mock_process = MagicMock()
-    mock_process.stderr.readlines.return_value = []
-    mock_popen.return_value = mock_process
+    # Setup mock run
+    mock_result = MagicMock()
+    mock_result.stdout = b"[]\n"
+    mock_result.stderr = b""
+    mock_run.return_value = mock_result
 
     mock_create_task_result.return_value = "mock_result"
 

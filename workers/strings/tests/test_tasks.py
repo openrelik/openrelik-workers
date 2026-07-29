@@ -55,8 +55,14 @@ def test_strings_task_success(
     }
     mock_create_output.return_value = mock_output_file
 
+    import subprocess as _subprocess
+
     mock_process = mock.Mock()
-    mock_process.poll.side_effect = [None, 0]  # Run once then finish
+    # One progress tick (timeout) then completion.
+    mock_process.wait.side_effect = [
+        _subprocess.TimeoutExpired(cmd="strings", timeout=3),
+        0,
+    ]
     mock_popen.return_value = mock_process
 
     mock_count_lines.return_value = 100

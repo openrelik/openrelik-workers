@@ -144,7 +144,9 @@ def export_container(
         export_command.append("--image")
 
     output_files: list[OutputFile] = []
-    logger.debug("Running container-explorer export command %s", " ".join(export_command))
+    logger.debug(
+        "Running container-explorer export command %s", " ".join(export_command)
+    )
 
     try:
         process: subprocess.CompletedProcess[str] = subprocess.run(
@@ -206,7 +208,9 @@ def export_all_containers(
     task_config: dict[str, str],
 ) -> list[OutputFile]:
     """Exports all containers disk image (.raw) or archive (.tar.gz)."""
-    logger.info("Attempting to export all containers on disk mounted at %s", disk_mount_dir)
+    logger.info(
+        "Attempting to export all containers on disk mounted at %s", disk_mount_dir
+    )
 
     container_export_dir: str = os.path.join(output_path, uuid4().hex)
     os.mkdir(container_export_dir)
@@ -219,7 +223,8 @@ def export_all_containers(
         "/opt/container-explorer/etc/supportcontainer.yaml",
         "--image-root",
         disk_mount_dir,
-        "export-all",
+        "export",
+        "--all",
         container_export_dir,
     ]
 
@@ -241,7 +246,9 @@ def export_all_containers(
 
     output_files: list[OutputFile] = []
 
-    logger.debug("Running container-explorer export command %s", " ".join(export_command))
+    logger.debug(
+        "Running container-explorer export command %s", " ".join(export_command)
+    )
 
     try:
         process: subprocess.CompletedProcess[str] = subprocess.run(
@@ -306,7 +313,9 @@ def export_all_containers(
             logger.debug("%d output file created", len(output_files))
 
         else:
-            _log_message: str = f"Error exporting all containers in disk {input_file.get('id')}"
+            _log_message: str = (
+                f"Error exporting all containers in disk {input_file.get('id')}"
+            )
             logger.error(_log_message)
             log_entry(log_file, _log_message)
 
@@ -343,19 +352,22 @@ def container_export(
     """
     task_id = self.request.id
     log_root.bind(workflow_id=workflow_id)
-    logger.info("Starting container export task ID: %s, Workflow ID: %s", task_id, workflow_id)
+    logger.info(
+        "Starting container export task ID: %s, Workflow ID: %s", task_id, workflow_id
+    )
 
     final_output_files: list[Any] = []
     log_files: list[Any] = []
     temp_dir: str = ""
     mountpoints: list[str] = []
 
-    input_files = get_input_files(pipe_result, input_files or [], filter=COMPATIBLE_INPUTS)
+    input_files = get_input_files(
+        pipe_result, input_files or [], filter=COMPATIBLE_INPUTS
+    )
 
     telemetry.add_attribute_to_current_span("input_files", input_files)
     telemetry.add_attribute_to_current_span("task_config", task_config)
     telemetry.add_attribute_to_current_span("workflow_id", workflow_id)
-
 
     # Log file to capture logs.
     log_file: OutputFile = create_output_file(
@@ -401,7 +413,9 @@ def container_export(
             mountpoints: list[str] = bd.mount()
 
             if not mountpoints:
-                logger.info("No mountpoints return for the disk %s", input_file.get("id"))
+                logger.info(
+                    "No mountpoints return for the disk %s", input_file.get("id")
+                )
 
                 logger.debug("Unmounting the disk %s", input_file.get("id"))
                 bd.umount()
@@ -432,7 +446,9 @@ def container_export(
 
                 # Export all containers from the mountpoint.
                 if not container_ids:
-                    logger.debug("Procesing mountpoint %s to export all containers", mountpoint)
+                    logger.debug(
+                        "Procesing mountpoint %s to export all containers", mountpoint
+                    )
 
                     container_export_files: list[OutputFile] = export_all_containers(
                         input_file, output_path, log_file, mountpoint, task_config
@@ -476,7 +492,9 @@ def container_export(
                             mountpoint,
                         )
 
-            logger.debug("Completed processing mountpoints in disk %s", input_file.get("id"))
+            logger.debug(
+                "Completed processing mountpoints in disk %s", input_file.get("id")
+            )
 
             for export_file in export_files:
                 final_output_files.append(export_file.to_dict())
@@ -520,6 +538,8 @@ def container_export_report(output_files: list[dict]) -> Report:
         return report
 
     for output_file in output_files:
-        summary.add_bullet(f"Exported container output file {output_file.get('display_name')}")
+        summary.add_bullet(
+            f"Exported container output file {output_file.get('display_name')}"
+        )
 
     return report

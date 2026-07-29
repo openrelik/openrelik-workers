@@ -97,6 +97,18 @@ TASK_METADATA = {
             "required": False,
         },
         {
+            "name": "calculate_hashes",
+            "label": "Calculate SHA-256 hashes for extracted files",
+            "description": (
+                "Also register the hashes.json manifest that image_export.py "
+                "writes (in-image path to SHA-256) as an output file with "
+                "data type extraction:image_export:hashes, so downstream "
+                "workers can use ready-made digests."
+            ),
+            "type": "checkbox",
+            "required": False,
+        },
+        {
             "name": "file_signatures",
             "label": "Select file format signatures to filter on",
             "description": "Filter on file format signature identifiers.",
@@ -144,6 +156,8 @@ def extract_task(
     log_root.bind(workflow_id=workflow_id)
     logger.info(f"Starting {TASK_NAME} for workflow {workflow_id}")
 
+    calculate_hashes = bool((task_config or {}).get("calculate_hashes"))
+
     def _get_base_command(export_directory):
         """Get the base command for image_export.
 
@@ -151,9 +165,8 @@ def extract_task(
             export_directory: Directory to export files to.
         """
 
-        return [
+        command = [
             "image_export.py",
-            "--no-hashes",
             "--write",
             export_directory,
             "--partitions",
@@ -162,6 +175,9 @@ def extract_task(
             "all",
             "--unattended",
         ]
+        if not calculate_hashes:
+            command.insert(1, "--no-hashes")
+        return command
 
     input_files = get_input_files(pipe_result, input_files or [])
     output_files = []
@@ -242,6 +258,23 @@ def extract_task(
                 # We need to hard ignore this file as image_export.py creates
                 # this file in a fixed path and filename.
                 if "artifacts_map.json" in file.absolute().name:
+                    continue
+                # image_export.py writes a hashes.json manifest at the export
+                # root when hashing is enabled. Register it with a dedicated
+                # data type instead of treating it as an extracted file.
+                if (
+                    calculate_hashes
+                    and file.name == "hashes.json"
+                    and file.parent == export_directory_path
+                ):
+                    manifest_file = create_output_file(
+                        output_path,
+                        display_name="hashes.json",
+                        data_type="extraction:image_export:hashes",
+                        source_file_id=input_file.get("id"),
+                    )
+                    shutil.copy(file.absolute(), manifest_file.path)
+                    output_files.append(manifest_file.to_dict())
                     continue
                 original_path = str(file.relative_to(export_directory_path))
                 artifact_types = get_artifact_types(

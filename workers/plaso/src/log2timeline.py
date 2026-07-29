@@ -146,6 +146,7 @@ def _output_display_name(task_config: dict | None) -> str | None:
 
     return f"{base_name}.plaso"
 
+
 @signals.task_prerun.connect
 def on_task_prerun(sender, task_id, task, args, kwargs, **_):
     log_root.bind(
@@ -184,10 +185,14 @@ def log2timeline(
     temp_dir = None
     register_in_db = (task_config or {}).get("register_in_db", True)
 
+    if not input_files:
+        logger.info("No input file provided, skipping the log2timeline task.")
+        return create_task_result(output_file=[], workflow_id=workflow_id, command="")
+
     upstream_original = None
     if len(input_files) == 1:
-        upstream_original = (
-            input_files[0].get("original_path") or input_files[0].get("path")
+        upstream_original = input_files[0].get("original_path") or input_files[0].get(
+            "path"
         )
 
     configured_display_name = _output_display_name(task_config)
@@ -287,7 +292,12 @@ def log2timeline(
             command.append(temp_dir)
 
     # Handle extraction of single ZIP input before launching log2timeline.py (slow $MFT parsing workaround)
-    elif input_files[0].get("path") and input_files[0].get("path").lower().endswith(".zip") and task_config and task_config.get("extract-single-zip") is True:
+    elif (
+        input_files[0].get("path")
+        and input_files[0].get("path").lower().endswith(".zip")
+        and task_config
+        and task_config.get("extract-single-zip") is True
+    ):
         logger.info(f"Extracting {input_files[0].get('path')}")
         log_file = create_output_file(
             output_path,
@@ -295,7 +305,7 @@ def log2timeline(
         )
 
         try:
-            (command_string, temp_dir) = extract_archive(
+            command_string, temp_dir = extract_archive(
                 input_files[0], output_path, log_file.path
             )
         except Exception as e:
