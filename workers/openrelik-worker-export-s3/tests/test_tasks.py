@@ -148,8 +148,8 @@ def test_object_name_pattern_identifier_with_extension(tmp_path):
         task_config={
             "s3_bucket": "test-bucket",
             "s3_prefix": "case-1",
-            "object_name": "{identifier}",
-            "identifier": "evidence",
+            "object_name": "{s3_identifier}",
+            "s3_identifier": "evidence",
         },
     )
     result = _decode(raw)
@@ -162,7 +162,7 @@ def test_object_name_pattern_identifier_with_extension(tmp_path):
 
 @mock_aws
 def test_object_name_pattern_with_slice_distinguisher(tmp_path):
-    """A pattern that wraps {identifier} keeps multiple export tasks from
+    """A pattern that wraps {s3_identifier} keeps multiple export tasks from
     colliding — the distinguisher lives in the template, not the importer."""
     _create_bucket()
     inputs = [_make_input(tmp_path, "uuid.csv", b"slice", display_name="uuid.csv")]
@@ -172,8 +172,8 @@ def test_object_name_pattern_with_slice_distinguisher(tmp_path):
         workflow_id="wf-slice",
         task_config={
             "s3_bucket": "test-bucket",
-            "object_name": "{identifier}_2024-01",
-            "identifier": "evidence",
+            "object_name": "{s3_identifier}_2024-01",
+            "s3_identifier": "evidence",
         },
     )
     result = _decode(raw)
@@ -182,9 +182,9 @@ def test_object_name_pattern_with_slice_distinguisher(tmp_path):
 
 @mock_aws
 def test_object_name_pattern_without_identifier_falls_back(tmp_path):
-    """A pattern referencing {identifier} with no value provided falls
+    """A pattern referencing {s3_identifier} with no value provided falls
     back to the upstream name rather than emitting a literal
-    '{identifier}'."""
+    '{s3_identifier}'."""
     _create_bucket()
     inputs = [
         _make_input(
@@ -199,7 +199,7 @@ def test_object_name_pattern_without_identifier_falls_back(tmp_path):
     raw = tasks.upload(
         input_files=inputs,
         workflow_id="wf-noval",
-        task_config={"s3_bucket": "test-bucket", "object_name": "{identifier}"},
+        task_config={"s3_bucket": "test-bucket", "object_name": "{s3_identifier}"},
     )
     result = _decode(raw)
     assert result["meta"]["uploaded_objects"][0]["key"] == "uuid.csv"
@@ -217,8 +217,8 @@ def test_object_name_pattern_applies_before_gzip_suffix(tmp_path):
         task_config={
             "s3_bucket": "test-bucket",
             "compression": "gzip",
-            "object_name": "{identifier}",
-            "identifier": "evidence",
+            "object_name": "{s3_identifier}",
+            "s3_identifier": "evidence",
         },
     )
     result = _decode(raw)

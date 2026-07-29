@@ -67,9 +67,9 @@ TASK_METADATA = {
             "label": "Object name pattern",
             "description": (
                 "Optional name for the uploaded object (the file portion of the "
-                "S3 key, joined under 'S3 key prefix'). Use '{identifier}' to "
+                "S3 key, joined under 'S3 key prefix'). Use '{s3_identifier}' to "
                 "insert the value from 'Object name identifier value' — add text "
-                "around it (e.g. '{identifier}_2024-01') to keep multiple export "
+                "around it (e.g. '{s3_identifier}_2024-01') to keep multiple export "
                 "tasks from overwriting each other. The uploaded file's extension "
                 "is added automatically. Leave blank to use the upstream filename."
             ),
@@ -77,13 +77,14 @@ TASK_METADATA = {
             "required": False,
         },
         {
-            "name": "identifier",
+            "name": "s3_identifier",
             "label": "Object name identifier value",
             "description": (
-                "A value to insert into the '{identifier}' placeholder in the "
+                "A value to insert into the '{s3_identifier}' placeholder in the "
                 "object name pattern — e.g. the original filename, a case ID, or "
                 "a hostname. An importer can set this automatically (param_name "
-                "'identifier'); otherwise enter it by hand."
+                "'s3_identifier', unique to this task so it never collides with "
+                "another exporter's identifier field); otherwise enter it by hand."
             ),
             "type": "text",
             "required": False,
@@ -109,19 +110,19 @@ def _resolve_object_name(
 ) -> str:
     """Build the object name from a user pattern, or fall back to ``fallback``.
 
-    When ``pattern`` is set, ``{identifier}`` is substituted with
+    When ``pattern`` is set, ``{s3_identifier}`` is substituted with
     ``identifier`` (a meaningful identifier such as the original
     filename, typically injected by an importer into the task config),
     and the upload file's own extension is appended. A pattern that references
-    ``{identifier}`` without a value provided is treated as unset so callers
-    fall back rather than emit a literal '{identifier}' key.
+    ``{s3_identifier}`` without a value provided is treated as unset so callers
+    fall back rather than emit a literal '{s3_identifier}' key.
     """
     pattern = (pattern or "").strip()
-    # No pattern, or a {identifier} pattern with no value to fill it: fall back
-    # rather than emit a literal placeholder.
-    if not pattern or ("{identifier}" in pattern and not identifier):
+    # No pattern, or a {s3_identifier} pattern with no value to fill it: fall
+    # back rather than emit a literal placeholder.
+    if not pattern or ("{s3_identifier}" in pattern and not identifier):
         return fallback
-    pattern = pattern.replace("{identifier}", identifier or "")
+    pattern = pattern.replace("{s3_identifier}", identifier or "")
     return f"{pattern}{_file_extension(input_file)}"
 
 
@@ -185,7 +186,7 @@ def upload(
         raise ValueError("task_config['s3_bucket'] is required.")
     prefix = _safe_key_segment(task_config.get("s3_prefix") or "")
     object_name_pattern = task_config.get("object_name") or ""
-    identifier = task_config.get("identifier") or ""
+    identifier = task_config.get("s3_identifier") or ""
     compression = task_config.get("compression") or "none"
     if compression not in VALID_COMPRESSION:
         raise ValueError(
@@ -223,7 +224,7 @@ def upload(
         fallback_name = (
             os.path.basename(original_path) if original_path else display_name
         )
-        # An object-name pattern (with {identifier}) wins over the upstream
+        # An object-name pattern (with {s3_identifier}) wins over the upstream
         # name — this is how a meaningful identifier (e.g. the original artifact
         # name) survives a pipeline that has otherwise reduced everything to
         # UUIDs.
