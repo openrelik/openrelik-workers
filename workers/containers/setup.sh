@@ -5,7 +5,7 @@
 set -e
 SCRIPTNAME=$(basename "$0")
 
-CE_VER=v0.6.0
+CE_VER=0.6.0
 CE_PKG=container-explorer.tar.gz
 
 CE_DIR=/opt/container-explorer

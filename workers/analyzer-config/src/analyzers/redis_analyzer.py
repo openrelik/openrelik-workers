@@ -36,6 +36,9 @@ def analyze_config(input_file: dict, task_config: dict) -> Report:
     bind_everywhere_re = re.compile(r'^\s*bind[\s"]*0\.0\.0\.0', re.IGNORECASE | re.MULTILINE)
     default_port_re = re.compile(r"port\s+6379\b", re.IGNORECASE)
     missing_logs_re = re.compile(r'^logfile\s+"[^"]+"$', re.MULTILINE)
+    lua_sandbox_escape_re = re.compile(
+        r"(package\.loadlib|os\.execute|io\.popen)", re.IGNORECASE
+    )
 
     if config is None or config == "":
         report.summary = "No Redis config found"
@@ -53,6 +56,13 @@ def analyze_config(input_file: dict, task_config: dict) -> Report:
         if not re.search(missing_logs_re, config):
             num_misconfigs += 1
             details_section.add_bullet("Log destination not configured")
+
+        if re.search(lua_sandbox_escape_re, config):
+            num_misconfigs += 1
+            details_section.add_bullet(
+                "Redis Lua sandbox escape (CVE-2022-0543) exploitation indicators "
+                "found (e.g. package.loadlib, os.execute)"
+            )
 
         if num_misconfigs > 0:
             report.summary = "Insecure Redis configuration found"

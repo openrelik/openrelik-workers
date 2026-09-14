@@ -8,6 +8,7 @@ readme = "README.md"
 dependencies = [
     "celery[redis]>=5.4.0,<6",
     "openrelik-worker-common>=0.17.1",
+    "openrelik-common>=0.7.7,<1.0.0",
     "debugpy>=1.8.7,<2",
 ]
 

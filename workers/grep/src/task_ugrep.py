@@ -17,8 +17,9 @@ import subprocess
 from celery import signals
 from celery.utils.log import get_task_logger
 
-from openrelik_worker_common.file_utils import create_output_file, count_file_lines
+from openrelik_common import telemetry
 from openrelik_common.logging import Logger
+from openrelik_worker_common.file_utils import create_output_file, count_file_lines
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 
 import datetime
@@ -114,6 +115,11 @@ def command(
     logger.info(f"Starting {TASK_NAME} for workflow {workflow_id}")
 
     input_files = get_input_files(pipe_result, input_files or [])
+
+    telemetry.add_attribute_to_current_span("input_files", input_files)
+    telemetry.add_attribute_to_current_span("task_config", task_config)
+    telemetry.add_attribute_to_current_span("workflow_id", workflow_id)
+
     output_files = []
     base_command = prepare_base_command(task_config)
     base_command_string = " ".join(base_command)

@@ -14,6 +14,7 @@
 
 import subprocess
 
+from openrelik_common import telemetry
 from openrelik_worker_common.file_utils import create_output_file
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 
@@ -65,6 +66,10 @@ def command(
     task_config = task_config or {}
     input_files = get_input_files(pipe_result, input_files or [])
     output_files = []
+
+    telemetry.add_attribute_to_current_span("input_files", input_files)
+    telemetry.add_attribute_to_current_span("task_config", task_config)
+    telemetry.add_attribute_to_current_span("workflow_id", workflow_id)
 
     # Determine if JSON output is requested
     json_output_enabled = task_config.get("json_output", False)

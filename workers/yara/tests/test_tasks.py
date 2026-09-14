@@ -173,7 +173,57 @@ def _mock_output_file(path):
     return output_file
 
 
-def test_command_fails_without_input_files(tmp_path):
+def test_command_parses_successful_fraken_output(tmp_path):
+    rule_file = tmp_path / "rule.yara"
+    rule_file.write_text('rule test { strings: $ = "test" condition: true }')
+    input_file = tmp_path / "input.txt"
+    input_file.write_text("test")
+
+    all_yara = _mock_output_file(tmp_path / "all.yara")
+    fraken_output = _mock_output_file(tmp_path / "fraken_out.jsonl")
+    fraken_stderr = _mock_output_file(tmp_path / "fraken_stderr.log")
+    report_file = _mock_output_file(tmp_path / "yara-scan-report.md")
+
+    def _run_with_match(*_, **kwargs):
+        match = {
+            "ImagePath": str(input_file),
+            "SHA256": "hash",
+            "Signature": "rule",
+            "Description": "description",
+            "Reference": "reference",
+            "Score": 100,
+        }
+        kwargs["stdout"].write(f"{json.dumps([match])}\n")
+        return SimpleNamespace(returncode=0)
+
+    with patch.dict(os.environ, {}, clear=True), patch(
+        "src.tasks.create_output_file",
+        side_effect=[all_yara, fraken_output, fraken_stderr, report_file],
+    ), patch(
+        "src.tasks.subprocess.run", side_effect=_run_with_match
+    ) as mock_run, patch(
+        "src.tasks.create_task_result", return_value="mock_result"
+    ) as mock_create_task_result, patch.object(command, "send_event"):
+        result = command.run(
+            None,
+            task_config={"Global Yara rules": str(rule_file)},
+            input_files=[
+                {"path": str(input_file), "display_name": input_file.name},
+            ],
+            output_path=str(tmp_path),
+            workflow_id="workflow123",
+        )
+
+    assert result == "mock_result"
+    mock_run.assert_called_once()
+    task_report = mock_create_task_result.call_args.kwargs["task_report"]
+    assert task_report["summary"] == "1 Yara match(es) found."
+    assert input_file.name in task_report["content"]
+    assert "rule" in task_report["content"]
+
+
+@pytest.mark.parametrize("input_files", [None, []])
+def test_command_fails_without_input_files(tmp_path, input_files):
     rule_file = tmp_path / "rule.yara"
     rule_file.write_text('rule test { strings: $ = "test" condition: true }')
 
@@ -182,7 +232,7 @@ def test_command_fails_without_input_files(tmp_path):
             command.run(
                 None,
                 task_config={"Global Yara rules": str(rule_file)},
-                input_files=[],
+                input_files=input_files,
                 output_path=str(tmp_path),
             )
 

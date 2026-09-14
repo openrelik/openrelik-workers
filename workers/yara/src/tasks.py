@@ -316,7 +316,7 @@ def command(
     output_files.append(fraken_output.to_dict())
     task_files.append(fraken_stderr.to_dict())
 
-    input_files = get_input_files(pipe_result, input_files or [])
+    input_files = get_input_files(pipe_result, input_files)
     if not input_files:
         raise RuntimeError("No input files were provided to Yara scan.")
 
