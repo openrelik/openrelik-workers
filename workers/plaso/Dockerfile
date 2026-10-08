@@ -1,60 +1,62 @@
-ARG BASE_IMAGE=ubuntu:24.04
+ARG BASE_IMAGE=ubuntu:26.04
 FROM ${BASE_IMAGE}
 
-# Choose what version of Plaso to use, default is "stable"
+# GIFT PPA track to install Plaso from: "stable" (default) or "staging" (used by CI)
 ARG PPA_TRACK=stable
 
-# Prevent needing to configure debian packages, stopping the setup of
-# the docker container.
+# System packages and Plaso
+
+# Don't prompt during package installation
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
-# Install dependencies
+# add-apt-repository fetches the PPA's current signing key from Launchpad, so key
+# rotations are picked up automatically. It also runs apt-get update.
+# p7zip-full provides the 7z binary used for archive extraction.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    software-properties-common \
-    python3-pip \
-    python3-poetry \
-    p7zip-full \
+    ca-certificates \
     gpg-agent \
-    wget \
+    p7zip-full \
+    software-properties-common \
     tzdata \
-  && rm -rf /var/lib/apt/lists/*
-
-# Install Plaso
-RUN add-apt-repository -y ppa:gift/$PPA_TRACK
-RUN apt-get update && apt-get install -y --no-install-recommends \
+  && add-apt-repository -y ppa:gift/${PPA_TRACK} \
+  && apt-get install -y --no-install-recommends \
     plaso-tools \
   && rm -rf /var/lib/apt/lists/*
 
-# Configure debugging
+# Python environment
+
+WORKDIR /openrelik
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
+
+# Always use the system Python plaso is installed into; ignore .python-version
+ENV UV_PYTHON=/usr/bin/python3 \
+    UV_PYTHON_DOWNLOADS=never
+
+# Worker packages go in a venv on the system Python. --system-site-packages lets the
+# worker import the apt-installed plaso, while log2timeline.py and psort.py
+# (#!/usr/bin/python3) run with only the apt packages plaso was built against.
+ENV VIRTUAL_ENV=/openrelik/.venv
+ENV UV_PROJECT_ENVIRONMENT=${VIRTUAL_ENV} \
+    PATH="${VIRTUAL_ENV}/bin:${PATH}"
+RUN uv venv --system-site-packages ${VIRTUAL_ENV}
+
+# Install dependencies before copying the code, so code changes don't
+# invalidate this layer
+COPY uv.lock pyproject.toml ./
+RUN uv sync --locked --no-install-project --no-dev
+
+# Worker code
+
+COPY . ./
+RUN uv sync --locked --no-dev
+
+# Runtime
+
 ARG OPENRELIK_PYDEBUG
 ENV OPENRELIK_PYDEBUG=${OPENRELIK_PYDEBUG:-0}
 ARG OPENRELIK_PYDEBUG_PORT
 ENV OPENRELIK_PYDEBUG_PORT=${OPENRELIK_PYDEBUG_PORT:-5678}
 
-# Set working directory
-WORKDIR /openrelik
-
-# Install the latest uv binaries
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-# Copy poetry toml and uv.lock
-COPY uv.lock pyproject.toml ./
-
-# Use the system Python environment as plaso is installed through apt
-ENV UV_PROJECT_ENVIRONMENT="/usr"
-
-# Install the project's dependencies using the lockfile and settings
-RUN uv sync --locked --no-install-project --no-dev
-
-# Copy all worker files
-COPY . ./
-
-# Installing separately from its dependencies allows optimal layer caching
-RUN uv sync --locked --no-dev
-
-# Set PATH to use the virtual environment
-ENV PATH="/openrelik/.venv/bin:$PATH"
-
-# Default command if not run from docker-compose (and command being overridden)
-CMD ["celery", "--app=src.tasks", "worker", "--task-events", "--concurrency=1", "--loglevel=INFO"]
+# Default command; docker-compose overrides it
+CMD ["celery", "--app=src.app", "worker", "--task-events", "--concurrency=1", "--loglevel=INFO"]
