@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 from uuid import uuid4
 
 from celery import signals
@@ -41,9 +41,7 @@ from .utils import is_ewf_files, log2timeline_status_to_dict, process_plaso_cli_
 parser_manager = manager.ParsersManager()
 parser_names = {parser for parser, _ in parser_manager.GetParsersInformation()}
 for plugin in parser_manager.GetNamesOfParsersWithPlugins():
-    for parser, _ in parser_manager.GetParserPluginsInformation(
-        parser_filter_expression=plugin
-    ):
+    for parser, _ in parser_manager.GetParserPluginsInformation(parser_filter_expression=plugin):
         parser_names.add(f"{plugin}/{parser}")
 
 # Get all Plaso supported archive types for user config form.
@@ -191,9 +189,7 @@ def log2timeline(
 
     upstream_original = None
     if len(input_files) == 1:
-        upstream_original = input_files[0].get("original_path") or input_files[0].get(
-            "path"
-        )
+        upstream_original = input_files[0].get("original_path") or input_files[0].get("path")
 
     configured_display_name = _output_display_name(task_config)
 
@@ -305,9 +301,7 @@ def log2timeline(
         )
 
         try:
-            command_string, temp_dir = extract_archive(
-                input_files[0], output_path, log_file.path
-            )
+            command_string, temp_dir = extract_archive(input_files[0], output_path, log_file.path)
         except Exception as e:
             logger.error(f"extract_archive failed: {e}")
             raise
@@ -342,7 +336,10 @@ def log2timeline(
     pinfo = pinfo_tool.PinfoTool()
     storage_reader = pinfo._GetStorageReader(temp_plaso_file.name)
     storage_version = storage_reader.GetFormatVersion()
-    storage_counter = pinfo._CalculateStorageCounters(storage_reader).get("parsers", {})
+    parsers_counter = pinfo._CalculateStorageCounters(storage_reader).get("parsers", {})
+    storage_counter = {
+        name: getattr(count, "number_of_events", count) for name, count in parsers_counter.items()
+    }
 
     # Copy temporary Plaso storage file to final output location
     temp_plaso_file.seek(0)
