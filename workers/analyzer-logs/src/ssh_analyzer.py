@@ -270,7 +270,7 @@ class LinuxSSHAnalysisTask:
                 log.warning(msg)
                 self.parsing_warnings.append(msg)
                 continue
-            except OSError as e:
+            except Exception as e:
                 msg = f"Error reading {log_filename}: {e}"
                 log.warning(msg)
                 self.parsing_warnings.append(msg)
