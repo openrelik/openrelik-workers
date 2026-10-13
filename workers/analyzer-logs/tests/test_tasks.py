@@ -57,6 +57,17 @@ _INPUT_FILES_WITHOUT_SSH_EVENTS = [
     }
 ]
 
+_INPUT_FILES_WITH_WARNINGS = [
+    {
+        "id": 1,
+        "uuid": "445027ec76ef42f8a463fdbaf162d2b0",
+        "display_name": "auth.log.missing",
+        "extension": "",
+        "data_type": "file:generic",
+        "path": "test_data/non_existent_auth.log",
+    }
+]
+
 
 server = None
 
@@ -152,3 +163,18 @@ class TestTasks:
             "# SSH log analyzer report\n\n\n##### Brute force analysis\n\n- No findings\n"
             in output_task_report_summary
         )
+
+    @patch("src.app.redis.Redis.from_url")
+    def test_task_report_with_parsing_warnings(self, mock_redisclient):
+        """Test that task report includes Evidence Parsing Notes section when warnings exist."""
+        output = run_ssh_analyzer(
+            input_files=_INPUT_FILES_WITH_WARNINGS,
+            output_path="/tmp",
+            workflow_id="deadbeef",
+            task_config={},
+        )
+
+        output_dict = json.loads(base64.b64decode(output))
+        output_task_report_summary = output_dict.get("task_report").get("content")
+        assert "### Evidence Parsing Notes" in output_task_report_summary
+        assert "auth.log.missing does not exist" in output_task_report_summary

@@ -213,7 +213,9 @@ class AuthAnalyzer:
         # matches the required fields
         column_list = df.columns.tolist()
         if not self.check_required_fields(column_list):
-            log.warning("Dataframe does not match required columns")
+            msg = f"[{self.NAME}] Dataframe does not match required columns"
+            log.warning(msg)
+            self.parsing_warnings.append(msg)
             return False
 
         df.fillna("", inplace=True)
@@ -233,7 +235,9 @@ class AuthAnalyzer:
 
         for req_field in self.REQUIRED_ATTRIBUTES:
             if req_field not in fields:
-                log.warning("Missing required field %s", req_field)
+                msg = f"[{self.NAME}] Missing required field {req_field}"
+                log.warning(msg)
+                self.parsing_warnings.append(msg)
                 return False
         return True
 
@@ -593,8 +597,8 @@ class AuthAnalyzer:
 
         logoff_df = ip_df[ip_df["event_type"] == "disconnection"]
         if logoff_df.empty:
-            log.warning(
-                "[%s] No disconnect event for session ID for %s", fname, session_id
+            log.debug(
+                "[%s] No disconnect event for session ID %s", fname, session_id
             )
         else:
             try:
@@ -892,9 +896,9 @@ class BruteForceAnalyzer(AuthAnalyzer):
             raise Exception("[{self.NAME}] Dataframe is empty")
 
         if not self.set_dataframe(df):
-            log.warning(
-                "[%s] Dataframe does not match the columns requirements", self.NAME
-            )
+            msg = f"[{self.NAME}] Dataframe does not match the columns requirements"
+            log.warning(msg)
+            self.parsing_warnings.append(msg)
             return None
         df = self.df
 
@@ -906,7 +910,9 @@ class BruteForceAnalyzer(AuthAnalyzer):
                 ", ".join(success_ips),
             )
         except KeyError as exception:
-            log.warning("Error generating success IP address: %s", str(exception))
+            msg = f"[{self.NAME}] Error generating success IP address: {str(exception)}"
+            log.warning(msg)
+            self.parsing_warnings.append(msg)
             return None
 
         reports = []

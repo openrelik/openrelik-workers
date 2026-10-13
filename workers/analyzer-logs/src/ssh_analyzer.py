@@ -244,8 +244,12 @@ class LinuxSSHAnalysisTask:
                     msg = f"Error opening a bad gzip file {log_filename}: {str(e)}"
                     log.warning(msg)
                     self.parsing_warnings.append(msg)
-                except OSError as e:
+                except FileNotFoundError as e:
                     msg = f"{log_filename} does not exist: {str(e)}"
+                    log.warning(msg)
+                    self.parsing_warnings.append(msg)
+                except OSError as e:
+                    msg = f"Error reading {log_filename}: {str(e)}"
                     log.warning(msg)
                     self.parsing_warnings.append(msg)
                 continue
@@ -259,8 +263,13 @@ class LinuxSSHAnalysisTask:
                     )
                     if records:
                         ssh_records += records
-            except (FileNotFoundError, OSError) as e:
-                msg = f"{log_file} does not exist: {str(e)}"
+            except FileNotFoundError as e:
+                msg = f"{log_filename} does not exist: {str(e)}"
+                log.warning(msg)
+                self.parsing_warnings.append(msg)
+                continue
+            except OSError as e:
+                msg = f"Error reading {log_filename}: {str(e)}"
                 log.warning(msg)
                 self.parsing_warnings.append(msg)
                 continue
@@ -357,7 +366,7 @@ class LinuxSSHAnalysisTask:
                 # NOTE: This does not mean actual error. This means the syslog event
                 # is not interesting for us to process for authentication analysis.
                 # example: Preauth disconnection events.
-                log.warning("Unable to get SSH message type: %s", line)
+                log.debug("Unable to get SSH message type: %s", line)
                 continue
 
             if not sshd_message_type:
@@ -459,8 +468,6 @@ class LinuxSSHAnalysisTask:
 
         try:
             bfa_result = bfa.run(df)
-            if bfa.parsing_warnings:
-                self.parsing_warnings.extend(bfa.parsing_warnings)
             if not bfa_result:
                 return (
                     Priority.LOW,
@@ -482,3 +489,6 @@ class LinuxSSHAnalysisTask:
         except Exception as exception:
             log.error("Unable to run brute force analyzer. %s", str(exception))
             return (Priority.LOW, "", "")
+        finally:
+            if bfa.parsing_warnings:
+                self.parsing_warnings.extend(bfa.parsing_warnings)
