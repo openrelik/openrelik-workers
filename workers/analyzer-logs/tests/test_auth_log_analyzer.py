@@ -369,7 +369,7 @@ class TestAuthAnalyzer:
         assert session_duration == -1
         assert len(self.analyzer.parsing_warnings) > 0
         assert any(
-            "No disconnection event found" in w
+            "Error getting session end time for" in w
             for w in self.analyzer.parsing_warnings
         )
         # Ensure no ERROR level logs were emitted (preventing GCP alerts)
