@@ -241,17 +241,17 @@ class LinuxSSHAnalysisTask:
                         if records:
                             ssh_records += records
                 except gzip.BadGzipFile as e:
-                    msg = f"Error opening a bad gzip file {log_filename}: {str(e)}"
+                    msg = f"Error opening a bad gzip file {log_filename}: {e}"
                     log.warning(msg)
                     self.parsing_warnings.append(msg)
                     continue
                 except FileNotFoundError as e:
-                    msg = f"{log_filename} does not exist: {str(e)}"
+                    msg = f"{log_filename} does not exist: {e}"
                     log.warning(msg)
                     self.parsing_warnings.append(msg)
                     continue
                 except Exception as e:
-                    msg = f"Error reading {log_filename}: {str(e)}"
+                    msg = f"Error reading {log_filename}: {e}"
                     log.warning(msg)
                     self.parsing_warnings.append(msg)
                     continue
@@ -266,12 +266,12 @@ class LinuxSSHAnalysisTask:
                     if records:
                         ssh_records += records
             except FileNotFoundError as e:
-                msg = f"{log_filename} does not exist: {str(e)}"
+                msg = f"{log_filename} does not exist: {e}"
                 log.warning(msg)
                 self.parsing_warnings.append(msg)
                 continue
             except OSError as e:
-                msg = f"Error reading {log_filename}: {str(e)}"
+                msg = f"Error reading {log_filename}: {e}"
                 log.warning(msg)
                 self.parsing_warnings.append(msg)
                 continue

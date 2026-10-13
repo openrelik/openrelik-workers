@@ -274,7 +274,7 @@ class AuthAnalyzer:
                 & (df["timestamp"] >= timestamp)
             ].iloc[0]["timestamp"]
         except (KeyError, ValueError, IndexError) as e:
-            msg = f"[{self.NAME}] Error getting session start time for {session_id}: {str(e)}"
+            msg = f"[{self.NAME}] Error getting session start time for {session_id}: {e}"
             log.warning(msg)
             self.parsing_warnings.append(msg)
             return -1
@@ -287,7 +287,7 @@ class AuthAnalyzer:
                 & (df["timestamp"] >= timestamp)
             ].iloc[0]["timestamp"]
         except (KeyError, ValueError, IndexError) as e:
-            msg = f"[{self.NAME}] Error getting session end time for {session_id}: {str(e)}"
+            msg = f"[{self.NAME}] Error getting session end time for {session_id}: {e}"
             log.warning(msg)
             self.parsing_warnings.append(msg)
             return -1
@@ -586,7 +586,7 @@ class AuthAnalyzer:
         except (IndexError, KeyError) as exception:
             msg = (
                 f"[{fname}] Error getting login timestamp for session ID {session_id}: "
-                f"{str(exception)}"
+                f"{exception}"
             )
             log.warning(msg)
             self.parsing_warnings.append(msg)
@@ -606,7 +606,7 @@ class AuthAnalyzer:
             except (IndexError, KeyError, ValueError) as exception:
                 msg = (
                     f"[{fname}] Error getting logoff timestamp for session ID "
-                    f"{session_id}: {str(exception)}"
+                    f"{session_id}: {exception}"
                 )
                 log.warning(msg)
                 self.parsing_warnings.append(msg)
@@ -910,7 +910,7 @@ class BruteForceAnalyzer(AuthAnalyzer):
                 ", ".join(success_ips),
             )
         except KeyError as exception:
-            msg = f"[{self.NAME}] Error generating success IP address: {str(exception)}"
+            msg = f"[{self.NAME}] Error generating success IP address: {exception}"
             log.warning(msg)
             self.parsing_warnings.append(msg)
             return None
