@@ -185,7 +185,7 @@ def log2timeline(
 
     if not input_files:
         logger.info("No input file provided, skipping the log2timeline task.")
-        return create_task_result(output_file=[], workflow_id=workflow_id, command="")
+        return create_task_result(output_files=[], workflow_id=workflow_id, command="")
 
     upstream_original = None
     if len(input_files) == 1:
