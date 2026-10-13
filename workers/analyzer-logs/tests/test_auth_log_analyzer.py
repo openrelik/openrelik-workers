@@ -321,6 +321,7 @@ class TestAuthAnalyzer:
         ]
         assert self.analyzer.check_required_fields(valid_fields) is True
 
+    # caplog is https://docs.pytest.org/en/stable/how-to/logging.html#caplog-fixture
     def test_session_duration(self, caplog):
         """Test session_duration method."""
         # Common dataframe for the rest of the unit tests
