@@ -244,15 +244,17 @@ class LinuxSSHAnalysisTask:
                     msg = f"Error opening a bad gzip file {log_filename}: {str(e)}"
                     log.warning(msg)
                     self.parsing_warnings.append(msg)
+                    continue
                 except FileNotFoundError as e:
                     msg = f"{log_filename} does not exist: {str(e)}"
                     log.warning(msg)
                     self.parsing_warnings.append(msg)
-                except OSError as e:
+                    continue
+                except Exception as e:
                     msg = f"Error reading {log_filename}: {str(e)}"
                     log.warning(msg)
                     self.parsing_warnings.append(msg)
-                continue
+                    continue
 
             # Handle standard log file
             try:
