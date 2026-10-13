@@ -194,6 +194,7 @@ class AuthAnalyzer:
         self.display_name = display_name
         self.description = description
         self.df = pd.DataFrame()
+        self.parsing_warnings = []
 
     def set_dataframe(self, df: pd.DataFrame) -> bool:
         """Validates dataframe columns and sets dataframe.
@@ -212,7 +213,7 @@ class AuthAnalyzer:
         # matches the required fields
         column_list = df.columns.tolist()
         if not self.check_required_fields(column_list):
-            log.error("Dataframe does not match required columns")
+            log.warning("Dataframe does not match required columns")
             return False
 
         df.fillna("", inplace=True)
@@ -232,7 +233,7 @@ class AuthAnalyzer:
 
         for req_field in self.REQUIRED_ATTRIBUTES:
             if req_field not in fields:
-                log.error("Missing required field %s", req_field)
+                log.warning("Missing required field %s", req_field)
                 return False
         return True
 
@@ -269,12 +270,9 @@ class AuthAnalyzer:
                 & (df["timestamp"] >= timestamp)
             ].iloc[0]["timestamp"]
         except (KeyError, ValueError, IndexError) as e:
-            log.error(
-                "[%s] Error getting session start time for %s. %s",
-                self.NAME,
-                session_id,
-                str(e),
-            )
+            msg = f"[{self.NAME}] Error getting session start time for {session_id}: {str(e)}"
+            log.warning(msg)
+            self.parsing_warnings.append(msg)
             return -1
 
         session_end_ts = 0
@@ -285,12 +283,9 @@ class AuthAnalyzer:
                 & (df["timestamp"] >= timestamp)
             ].iloc[0]["timestamp"]
         except (KeyError, ValueError, IndexError) as e:
-            log.error(
-                "[%s] Error getting session end time for %s. %s",
-                self.NAME,
-                session_id,
-                str(e),
-            )
+            msg = f"[{self.NAME}] Error getting session end time for {session_id}: {str(e)}"
+            log.warning(msg)
+            self.parsing_warnings.append(msg)
             return -1
 
         return int(session_end_ts - session_start_ts)
@@ -394,7 +389,7 @@ class AuthAnalyzer:
             summary.domain = domain
             summary.username = username
         else:
-            log.error("Unsupported summary_type value %s", summary_type)
+            log.warning("Unsupported summary_type value %s", summary_type)
             return None
 
         # Step 1: First and last authentication event for IP address or useraccount
@@ -585,12 +580,12 @@ class AuthAnalyzer:
             login_ts = int(login_df.iloc[0]["timestamp"])
             source_port = int(login_df.iloc[0]["source_port"])
         except (IndexError, KeyError) as exception:
-            log.error(
-                "[%s] Error getting login timestamp for session ID %s. %s",
-                fname,
-                session_id,
-                str(exception),
+            msg = (
+                f"[{fname}] Error getting login timestamp for session ID {session_id}: "
+                f"{str(exception)}"
             )
+            log.warning(msg)
+            self.parsing_warnings.append(msg)
             return None
 
         # Calculating logoff timestamp
@@ -598,19 +593,19 @@ class AuthAnalyzer:
 
         logoff_df = ip_df[ip_df["event_type"] == "disconnection"]
         if logoff_df.empty:
-            log.debug(
+            log.warning(
                 "[%s] No disconnect event for session ID for %s", fname, session_id
             )
         else:
             try:
                 logoff_ts = int(logoff_df.iloc[0]["timestamp"])
             except (IndexError, KeyError, ValueError) as exception:
-                log.error(
-                    "[%s] Error getting logoff timestamp for session ID %s. %s",
-                    fname,
-                    session_id,
-                    str(exception),
+                msg = (
+                    f"[{fname}] Error getting logoff timestamp for session ID "
+                    f"{session_id}: {str(exception)}"
                 )
+                log.warning(msg)
+                self.parsing_warnings.append(msg)
 
         login_session = LoginRecord(
             source_ip=source_ip, domain=domain, username=username, session_id=session_id
@@ -897,7 +892,7 @@ class BruteForceAnalyzer(AuthAnalyzer):
             raise Exception("[{self.NAME}] Dataframe is empty")
 
         if not self.set_dataframe(df):
-            log.error(
+            log.warning(
                 "[%s] Dataframe does not match the columns requirements", self.NAME
             )
             return None
@@ -911,7 +906,7 @@ class BruteForceAnalyzer(AuthAnalyzer):
                 ", ".join(success_ips),
             )
         except KeyError as exception:
-            log.error("Error generating success IP address: %s", str(exception))
+            log.warning("Error generating success IP address: %s", str(exception))
             return None
 
         reports = []

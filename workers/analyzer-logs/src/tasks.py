@@ -125,6 +125,13 @@ def run_ssh_analyzer(
 
         output_files.append(output_file.to_dict())
 
+    if ssh_analysis_task.parsing_warnings:
+        unique_warnings = list(dict.fromkeys(ssh_analysis_task.parsing_warnings))
+        notes_section = task_report.add_section()
+        notes_section.add_header("Evidence Parsing Notes", level=3)
+        for warning in unique_warnings:
+            notes_section.add_bullet(warning)
+
     return create_task_result(
         output_files=output_files,
         workflow_id=workflow_id,

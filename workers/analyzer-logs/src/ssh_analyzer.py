@@ -201,6 +201,7 @@ class LinuxSSHAnalysisTask:
 
     def __init__(self, log_year=None):
         self.log_year = log_year
+        self.parsing_warnings = []
 
     def read_logs(self, input_files: list) -> pd.DataFrame:
         """Reads SSH logs directory and returns Pandas dataframe.
@@ -240,13 +241,14 @@ class LinuxSSHAnalysisTask:
                         if records:
                             ssh_records += records
                 except gzip.BadGzipFile as e:
-                    log.error(
-                        "Error opening a bad gzip file %s. %s", log_filename, {str(e)}
-                    )
+                    msg = f"Error opening a bad gzip file {log_filename}: {str(e)}"
+                    log.warning(msg)
+                    self.parsing_warnings.append(msg)
                 except OSError as e:
-                    log.error("%s does not exist. %s", log_filename, str(e))
-                finally:
-                    continue
+                    msg = f"{log_filename} does not exist: {str(e)}"
+                    log.warning(msg)
+                    self.parsing_warnings.append(msg)
+                continue
 
             # Handle standard log file
             try:
@@ -258,8 +260,9 @@ class LinuxSSHAnalysisTask:
                     if records:
                         ssh_records += records
             except (FileNotFoundError, OSError) as e:
-                log.error("%s does not exist. %s", log_file, str(e))
-            finally:
+                msg = f"{log_file} does not exist: {str(e)}"
+                log.warning(msg)
+                self.parsing_warnings.append(msg)
                 continue
 
         if not ssh_records:
@@ -307,7 +310,7 @@ class LinuxSSHAnalysisTask:
             else:
                 return datetime.fromtimestamp(0).astimezone(timezone.utc)
         except ValueError:
-            log.error("Invalid datetime format %s", " ".join(message_datetime))
+            log.warning("Invalid datetime format %s", " ".join(message_datetime))
         return None
 
     def parse_log_data(
@@ -354,7 +357,7 @@ class LinuxSSHAnalysisTask:
                 # NOTE: This does not mean actual error. This means the syslog event
                 # is not interesting for us to process for authentication analysis.
                 # example: Preauth disconnection events.
-                log.error("Unable to get SSH message type: %s", line)
+                log.warning("Unable to get SSH message type: %s", line)
                 continue
 
             if not sshd_message_type:
@@ -393,7 +396,7 @@ class LinuxSSHAnalysisTask:
             # handle date/time
             dt_object = self.parse_message_datetime(gd["datetime"].split(), log_year)
             if not dt_object:
-                log.error("Error extracting date/time from %s", line)
+                log.warning("Error extracting date/time from %s", line)
                 continue
             event_date = dt_object.strftime("%Y-%m-%d")
             event_time = dt_object.strftime("%H:%M:%S")
@@ -435,7 +438,7 @@ class LinuxSSHAnalysisTask:
         try:
             return Priority[analyzer_priority_string]
         except KeyError:
-            log.error(
+            log.warning(
                 "Priority %s does not exist. Returning LOW", analyzer_priority_string
             )
             return Priority.LOW
@@ -456,6 +459,8 @@ class LinuxSSHAnalysisTask:
 
         try:
             bfa_result = bfa.run(df)
+            if bfa.parsing_warnings:
+                self.parsing_warnings.extend(bfa.parsing_warnings)
             if not bfa_result:
                 return (
                     Priority.LOW,
