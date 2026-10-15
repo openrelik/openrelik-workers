@@ -135,30 +135,22 @@ def run_ssh_analyzer(
 
 
 
-# --- TASK: LOG DISCOVERY ---
 TASK_NAME_DISCOVERY = "openrelik-worker-analyzer-logs.tasks.log_discovery"
 TASK_METADATA_DISCOVERY = {
     "display_name": "Log Discovery (Timestamp Density)",
-    "description": "Scans file contents to identify unparsed logs based on timestamp density, ignoring file extensions. KNOWN LIMITATIONS: (1) Skips binary files like Windows Event Logs (.evtx), media, and executables. (2) Skips pure JSON logs unless values match standard date formats. (3) Caps scanning at 500 lines to preserve memory, so heavily padded files may be bypassed.",
+    "description": "Scan text files to identify potential logs based on timestamp density, regardless of file extension.",
     "task_config": [
         {
             "name": "threshold",
             "label": "Density Threshold",
-            "description": "The minimum ratio of log-like lines required to flag a file (e.g., 0.15 means 15% of the sampled lines must match).",
+            "description": "Minimum ratio of log-like lines required to flag a file (e.g., 0.15 means 15% of sampled lines must match).",
             "type": "text",
             "required": False,
-            "default": "0.15"
-        },
-        {
-            "name": "mount_disk_images",
-            "label": "Mount disk images",
-            "description": "If checked, automatically mounts .dd/.raw images and scans their internal file systems.",
-            "type": "checkbox",
-            "required": True,
-            "default_value": True,
+            "default": "0.15",
         },
     ],
 }
+
 
 @celery.task(bind=True, name=TASK_NAME_DISCOVERY, metadata=TASK_METADATA_DISCOVERY)
 def run_log_discovery(
@@ -169,23 +161,20 @@ def run_log_discovery(
     workflow_id: str = None,
     task_config: dict = None,
 ) -> str:
-    """
-    Routes the log discovery request to the LogDiscoveryAnalyzer engine.
-    """
+    """Run log discovery analysis on input files."""
     log_root.bind(workflow_id=workflow_id)
     logger.info(f"Starting {TASK_NAME_DISCOVERY} for workflow {workflow_id}")
 
     input_files = get_input_files(pipe_result, input_files or [])
-    
     threshold = float(task_config.get("threshold") or 0.15)
-    mount_disk_images = task_config.get("mount_disk_images", True)
 
-    # Initialize the engine from our separate logic file
-    analyzer = LogDiscoveryAnalyzer(threshold=threshold, mount_disk_images=mount_disk_images)
-    output_files, total_logs = analyzer.analyze(input_files=input_files, output_path=output_path)
+    analyzer = LogDiscoveryAnalyzer(threshold=threshold)
+    output_files, total_logs = analyzer.analyze(
+        input_files=input_files, output_path=output_path
+    )
 
     return create_task_result(
         output_files=output_files,
         workflow_id=workflow_id,
-        meta={"summary": f"Found {total_logs} potential logs."}
+        meta={"summary": f"Found {total_logs} potential logs."},
     )
