@@ -1,0 +1,12 @@
+# Showcase this worker on https://openrelik.org/marketplace
+publish: true
+
+# Worker Metadata. This section is required.
+display_name: Export to S3
+description: Export input files to Amazon S3 (or any S3-compatible endpoint) with optional gzip or tar.gz compression.
+
+# Optional: Third-Party Tools Used by the Worker.
+tools:
+  - display_name: Amazon S3
+    description: AWS S3 object storage
+    url: https://docs.aws.amazon.com/s3/
