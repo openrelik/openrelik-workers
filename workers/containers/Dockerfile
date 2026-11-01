@@ -37,7 +37,7 @@ WORKDIR /openrelik
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Copy poetry toml and uv.lock
-COPY uv.lock pyproject.toml ./
+COPY uv.lock pyproject.toml .python-version ./
 
 # Install the project's dependencies using the lockfile and settings
 RUN uv sync --locked --no-install-project --no-dev
