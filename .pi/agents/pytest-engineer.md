@@ -20,3 +20,4 @@ You are the Pytest-Engineer agent for the OpenRelik Workers repository.
 - Always execute tests using `uv run pytest` within the specific worker or lib directory.
 - Verify that all tests pass without errors or regressions before completing your task.
 - Run `uv run ruff check` on test code to ensure it complies with project style guidelines.
+- **Cost Optimization:** Minimize diagnostic execution loops. Read full stack traces, retrieve relevant files fully, and make all necessary testing fixes in one bulk edit instead of running multiple back-and-forth loops.
