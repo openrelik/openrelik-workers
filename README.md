@@ -14,5 +14,7 @@ Fork this repository, clone it, develop and finally create a PR against this rep
 
 Every subfolder contains their own README with more details per worker.
 
+## Worker Test Coverage
 
-
+<!-- COVERAGE_START -->
+<!-- COVERAGE_END -->
