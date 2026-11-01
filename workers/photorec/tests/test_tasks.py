@@ -28,6 +28,13 @@ def _decode(encoded):
 
 
 class TestBuildCommand(unittest.TestCase):
+    def test_on_task_prerun(self):
+        # Simply ensure the signal handler executes without error
+        from src.tasks import on_task_prerun
+        from collections import namedtuple
+        Task = namedtuple("Task", ["name"])
+        on_task_prerun(None, "task-123", Task(name="test-task"), [], {})
+
     def test_freespace_default_and_formats(self):
         command = tasks._build_command("/in/disk.raw", "/out", ["elf", "txt"], False)
         cmd_string = command[-1]
@@ -66,11 +73,15 @@ class TestCarveTask(unittest.TestCase):
             class P:
                 returncode = 0
                 stderr = None
+                _poll_calls = 0
                 def poll(self):
+                    if self._poll_calls < 1:
+                        self._poll_calls += 1
+                        return None
                     return 0
             return P()
 
-        with patch.object(tasks.subprocess, "Popen", side_effect=fake_popen):
+        with patch.object(tasks.subprocess, "Popen", side_effect=fake_popen), patch("src.tasks.time.sleep"), patch.object(tasks.photorec_carve, "send_event"):
             encoded = tasks.photorec_carve.run(
                 input_files=[{"path": image, "display_name": "disk.raw", "uuid": "u1"}],
                 output_path=tmp.name,
@@ -102,6 +113,40 @@ class TestCarveTask(unittest.TestCase):
         self.assertEqual(result["meta"]["skipped_over_cap"], 2)
         self.assertEqual(result["meta"]["carved_total"], 3)
         self.assertIn("over the cap", result["task_report"]["summary"])
+
+    def test_max_files_value_error(self):
+        result = self._run(
+            task_config={"max_files": "invalid"},
+            carved=("f1.elf", "f2.elf"),
+        )
+        self.assertEqual(len(result["output_files"]), 2)
+
+    @patch("src.tasks.time.sleep")
+    def test_process_error(self, mock_sleep):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        image = os.path.join(tmp.name, "disk.raw")
+        with open(image, "wb") as fh:
+            fh.write(b"\x00")
+
+        def fake_popen_error(command, **kwargs):
+            class P:
+                returncode = 1
+                class Stderr:
+                    def read(self):
+                        return "Mock error"
+                stderr = Stderr()
+                def poll(self):
+                    return 1
+            return P()
+
+        with patch.object(tasks.subprocess, "Popen", side_effect=fake_popen_error), patch.object(tasks.photorec_carve, "send_event"):
+            tasks.photorec_carve.run(
+                input_files=[{"path": image, "display_name": "disk.raw", "uuid": "u1"}],
+                output_path=tmp.name,
+                workflow_id="wf-1",
+                task_config={},
+            )
 
 
 if __name__ == "__main__":
