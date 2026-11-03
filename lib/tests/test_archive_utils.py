@@ -353,6 +353,19 @@ class TestArchiveUtils(unittest.TestCase):
         self.assertIn("-xr!*.log", result[0])
         self.assertIn(self.output_folder, result[1])
 
+    @patch("shutil.which")
+    def test_extract_archive_unsupported_extension(self, mock_which):
+        """Test that an unsupported archive extension raises ValueError."""
+        for filename in ("document.txt", "syslog.2.gz"):
+            input_file = {
+                "path": f"/path/to/{filename}",
+                "display_name": filename,
+            }
+            mock_which.return_value = True
+
+            with self.assertRaises(ValueError):
+                extract_archive(input_file, self.output_folder, self.log_file)
+
 
 if __name__ == "__main__":
     unittest.main()

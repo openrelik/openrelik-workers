@@ -22,6 +22,7 @@ from openrelik_common import telemetry
 from openrelik_common.logging import Logger
 from openrelik_worker_common.archive_utils import extract_archive
 from openrelik_worker_common.file_utils import create_output_file
+from openrelik_worker_common.reporting import Report
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 
 from .app import celery
@@ -118,6 +119,7 @@ def extract_archive_task(
     input_files = get_input_files(pipe_result, input_files or [])
     output_files = []
     task_files = []
+    errors = []
     command_string = ""
     archive_password = task_config.get("archive_password", None)
     file_filters = task_config.get("file_filter") or []
@@ -159,7 +161,8 @@ def extract_archive_task(
             )
         except Exception as e:
             logger.error(f"extract_archive failed: {e}")
-            raise
+            errors.append(str(e))
+            continue
 
         logger.info(f"Executed extract_archive command: {command_string}")
 
@@ -186,6 +189,15 @@ def extract_archive_task(
         # Clean up the export directory
         shutil.rmtree(export_directory)
 
+    task_report = None
+    if errors:
+        report = Report("Archive Extraction Report")
+        section = report.add_section()
+        section.add_header("Unsupported Files")
+        for error in errors:
+            section.add_bullet(error)
+        task_report = report.to_dict()
+
     logger.info(f"Done {TASK_NAME} for workflow {workflow_id}")
     telemetry.add_event_to_current_span("Completed extration of files")
 
@@ -194,4 +206,5 @@ def extract_archive_task(
         task_files=task_files,
         workflow_id=workflow_id,
         command=command_string,
+        task_report=task_report,
     )
