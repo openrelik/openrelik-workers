@@ -181,7 +181,9 @@ def log2timeline(
     input_files = get_input_files(pipe_result, input_files or [])
     output_files = []
     temp_dir = None
-    register_in_db = (task_config or {}).get("register_in_db", True)
+    # Only an explicit False opts out: clients may send null for options they
+    # don't know, and a null must not drop the result files.
+    register_in_db = (task_config or {}).get("register_in_db") is not False
 
     if not input_files:
         logger.info("No input file provided, skipping the log2timeline task.")

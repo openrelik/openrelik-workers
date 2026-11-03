@@ -436,6 +436,24 @@ def test_log2timeline_register_in_db_false(tmp_path, fake_subprocess, bound_task
     assert result["output_files"][0]["register_in_db"] is False
 
 
+def test_log2timeline_register_in_db_null_defaults_to_true(
+    tmp_path, fake_subprocess, bound_task
+):
+    """A null value (sent by clients that don't know the option) keeps the default."""
+    inputs = [{"path": "/in/disk.raw", "display_name": "disk.raw"}]
+
+    raw = log2timeline.log2timeline(
+        bound_task,
+        input_files=inputs,
+        output_path=str(tmp_path),
+        workflow_id="wf-null-db",
+        task_config={"register_in_db": None},
+    )
+
+    result = _decode(raw)
+    assert result["output_files"][0]["register_in_db"] is True
+
+
 def test_log2timeline_command_options(tmp_path, fake_subprocess, bound_task):
     """Verify artifacts, parsers, and archives flags are added to command."""
     inputs = [{"path": "/in/disk.raw", "display_name": "disk.raw"}]

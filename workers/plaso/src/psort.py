@@ -125,7 +125,9 @@ def psort(
         output_extension = task_config["output_format"]
 
     cfg = task_config or {}
-    register_in_db = cfg.get("register_in_db", True)
+    # Only an explicit False opts out: clients may send null for options they
+    # don't know, and a null must not drop the result files.
+    register_in_db = cfg.get("register_in_db") is not False
     event_filter = (cfg.get("filter") or "").strip()
 
     for input_file in input_files:

@@ -236,6 +236,21 @@ def test_psort_register_in_db_false_propagates(tmp_path, fake_subprocess, bound_
     assert result["output_files"][0]["register_in_db"] is False
 
 
+def test_psort_register_in_db_null_defaults_to_true(tmp_path, fake_subprocess, bound_task):
+    """A null value (sent by clients that don't know the option) keeps the default."""
+    inputs = [{"path": "/in/foo.plaso", "display_name": "foo.plaso"}]
+
+    raw = psort.psort(
+        bound_task,
+        input_files=inputs,
+        output_path=str(tmp_path),
+        workflow_id="wf-3",
+        task_config={"register_in_db": None},
+    )
+    result = _decode(raw)
+    assert result["output_files"][0]["register_in_db"] is True
+
+
 def test_psort_multiple_inputs_emit_all_outputs(tmp_path, fake_subprocess, bound_task):
     """Regression for the prior bug where output_files.append sat outside the
     per-input loop and only the last input's file was reported."""

@@ -304,6 +304,30 @@ def test_extracted_files_register_in_db_by_default(mock_celery_task, mock_depend
     assert extracted_call.kwargs.get("register_in_db") is True
 
 
+def test_extracted_files_register_in_db_when_value_is_null(
+    mock_celery_task, mock_dependencies
+):
+    """A null value (sent by clients that don't know the option) keeps the default."""
+    _run_task_with_one_extracted_file(
+        mock_celery_task, mock_dependencies, task_config={"register_in_db": None}
+    )
+
+    extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
+    assert extracted_call.kwargs.get("register_in_db") is True
+
+
+def test_extracted_files_register_in_db_when_task_config_is_none(
+    mock_celery_task, mock_dependencies
+):
+    """When task_config is None, default values are preserved and no error is raised."""
+    _run_task_with_one_extracted_file(
+        mock_celery_task, mock_dependencies, task_config=None
+    )
+
+    extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
+    assert extracted_call.kwargs.get("register_in_db") is True
+
+
 def test_extracted_files_skip_db_when_register_in_db_false(
     mock_celery_task, mock_dependencies
 ):
