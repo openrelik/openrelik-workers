@@ -31,7 +31,7 @@ Every subfolder contains their own README with more details per worker.
 | entropy | 98% |
 | exif | 96% |
 | extraction | 98% |
-| floss | Failed |
+| floss | 94% |
 | grep | 100% |
 | hasher | 99% |
 | llm | 0% |
