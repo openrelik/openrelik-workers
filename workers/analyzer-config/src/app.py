@@ -25,7 +25,7 @@ telemetry.setup_telemetry('openrelik-worker-analyzer-config')
 if os.getenv("OPENRELIK_PYDEBUG") == "1":
     start_debugger()
 
-REDIS_URL = os.getenv("REDIS_URL")
+REDIS_URL = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
 celery = Celery(
     broker=REDIS_URL,
     backend=REDIS_URL,
