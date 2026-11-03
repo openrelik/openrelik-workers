@@ -51,9 +51,22 @@ class Utils(unittest.TestCase):
     def test_BlkInfo(self):
         bd = mount_utils.BlockDevice("./test_data/image_vfat.img")
         bd.setup()
+        devices = bd.blkdeviceinfo["blockdevices"]
+        self.assertEqual(len(devices), 1)
+        dev = dict(devices[0])
+        # lsblk output varies by util-linux version: unmounted devices report
+        # "mountpoints": [null] on older releases and [] on newer ones.
+        self.assertIn(dev.pop("mountpoints", []), ([], [None]))
         self.assertEqual(
-            str(bd.blkdeviceinfo),
-            "{'blockdevices': [{'name': 'loop0', 'maj:min': '7:0', 'rm': False, 'size': 1048576, 'ro': True, 'type': 'loop', 'mountpoints': [None]}]}",
+            dev,
+            {
+                "name": "loop0",
+                "maj:min": "7:0",
+                "rm": False,
+                "size": 1048576,
+                "ro": True,
+                "type": "loop",
+            },
         )
 
     @patch("openrelik_worker_common.mount_utils.BlockDevice._losetup")
