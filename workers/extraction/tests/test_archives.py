@@ -184,15 +184,25 @@ def test_extract_archive_task_exception(mock_celery_task, mock_dependencies):
 
     mock_dependencies["extract_archive"].side_effect = Exception("Extraction failed")
 
-    with pytest.raises(Exception, match="Extraction failed"):
-        archives.extract_archive_task.__class__.run(
-            mock_celery_task,
-            pipe_result=None,
-            input_files=[{"id": "file1"}],
-            output_path="/tmp/output",
-            workflow_id="wf1",
-            task_config={},
-        )
+    archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        pipe_result=None,
+        input_files=[{"id": "file1"}],
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config={},
+    )
+
+    # Failure is swallowed: nothing extracted, nothing cleaned up.
+    mock_dependencies["rename"].assert_not_called()
+    mock_dependencies["rmtree"].assert_not_called()
+
+    # Task still returns a result, with the error in the report.
+    mock_dependencies["create_task_result"].assert_called_once()
+    kwargs = mock_dependencies["create_task_result"].call_args.kwargs
+    assert kwargs["output_files"] == []
+    assert kwargs["task_report"] is not None
+    assert "Extraction failed" in str(kwargs["task_report"])
 
 
 def test_extract_archive_task_file_filter_list(mock_celery_task, mock_dependencies):

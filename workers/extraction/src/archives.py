@@ -159,15 +159,14 @@ def extract_archive_task(
                 ignore_prompts,
                 exclusion_patterns,
             )
+            logger.info(f"Executed extract_archive command: {command_string}")
         except Exception as e:
             logger.error(f"extract_archive failed: {e}")
             errors.append(str(e))
             continue
-
-        logger.info(f"Executed extract_archive command: {command_string}")
-
-        if os.path.isfile(log_file.path):
-            task_files.append(log_file.to_dict())
+        finally:
+            if os.path.isfile(log_file.path):
+                task_files.append(log_file.to_dict())
 
         export_directory_path = Path(export_directory)
         extracted_files = [
