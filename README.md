@@ -14,5 +14,31 @@ Fork this repository, clone it, develop and finally create a PR against this rep
 
 Every subfolder contains their own README with more details per worker.
 
+## Worker Test Coverage
 
-
+<!-- COVERAGE_START -->
+| Worker | Coverage |
+| --- | --- |
+| analyzer-config | 96% |
+| analyzer-logs | 86% |
+| bulkextractor | 97% |
+| capa | 98% |
+| chromecreds | 97% |
+| cloud-logs | 100% |
+| containers | 57% |
+| dfindexeddb | Failed |
+| duckdb | 0% |
+| entropy | 98% |
+| exif | 96% |
+| extraction | 98% |
+| floss | Failed |
+| grep | 100% |
+| hasher | 99% |
+| llm | 0% |
+| os-creds | 96% |
+| photorec | 99% |
+| plaso | 90% |
+| strings | 100% |
+| timesketch | 76% |
+| yara | 99% |
+<!-- COVERAGE_END -->
