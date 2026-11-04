@@ -22,6 +22,7 @@ from openrelik_worker_common.task_utils import create_task_result, get_input_fil
 from .app import celery
 from .logger import log_root
 from .ssh_analyzer import LinuxSSHAnalysisTask
+from .log_discovery import LogDiscoveryAnalyzer
 
 # Task name used to register and route the task to the correct queue.
 TASK_NAME = "openrelik-worker-analyzer-logs.tasks.ssh_analyzer"
@@ -137,4 +138,50 @@ def run_ssh_analyzer(
         workflow_id=workflow_id,
         task_report=task_report.to_dict(),
         meta={},
+    )
+
+
+
+TASK_NAME_DISCOVERY = "openrelik-worker-analyzer-logs.tasks.log_discovery"
+TASK_METADATA_DISCOVERY = {
+    "display_name": "Log Discovery (Timestamp Density)",
+    "description": "Scan text files to identify potential logs based on timestamp density, regardless of file extension.",
+    "task_config": [
+        {
+            "name": "threshold",
+            "label": "Density Threshold",
+            "description": "Minimum ratio of log-like lines required to flag a file (e.g., 0.15 means 15% of sampled lines must match).",
+            "type": "text",
+            "required": False,
+            "default": "0.15",
+        },
+    ],
+}
+
+
+@celery.task(bind=True, name=TASK_NAME_DISCOVERY, metadata=TASK_METADATA_DISCOVERY)
+def run_log_discovery(
+    self,
+    pipe_result: str = None,
+    input_files: list = None,
+    output_path: str = None,
+    workflow_id: str = None,
+    task_config: dict = None,
+) -> str:
+    """Run log discovery analysis on input files."""
+    log_root.bind(workflow_id=workflow_id)
+    logger.info(f"Starting {TASK_NAME_DISCOVERY} for workflow {workflow_id}")
+
+    input_files = get_input_files(pipe_result, input_files or [])
+    threshold = float(task_config.get("threshold") or 0.15)
+
+    analyzer = LogDiscoveryAnalyzer(threshold=threshold)
+    output_files, total_logs = analyzer.analyze(
+        input_files=input_files, output_path=output_path
+    )
+
+    return create_task_result(
+        output_files=output_files,
+        workflow_id=workflow_id,
+        meta={"summary": f"Found {total_logs} potential logs."},
     )
