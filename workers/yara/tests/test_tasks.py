@@ -148,7 +148,110 @@ def test_safe_list_get():
     assert safe_list_get(test_list, 5, 99) == 99
 
 
-def test_generate_report_from_matches():
+def test_command_env_variable_and_dir_rules(tmp_path):
+    """Test rule loading from environment variable and directories."""
+    yara_dir = tmp_path / "rules"
+    yara_dir.mkdir()
+    (yara_dir / "test.yar").write_text("rule env_rule {}")
+    
+    task_config = {}
+    with patch.dict(os.environ, {"OPENRELIK_YARA_RULES_FOLDER": str(yara_dir)}):
+        with patch("src.tasks.command.send_event"), \
+             patch("subprocess.run") as mock_run, \
+             patch("src.tasks.create_task_result"), \
+             patch("src.tasks.create_output_file") as mock_create_file:
+             
+            def side_effect_create_output_file(output_path, display_name, **kwargs):
+                mock_file = MagicMock()
+                mock_file.path = str(tmp_path / display_name)
+                mock_file.to_dict.return_value = {"path": mock_file.path}
+                if display_name == "fraken_out.jsonl":
+                    with open(mock_file.path, "w") as f:
+                        f.write("[]\n")
+                return mock_file
+            
+            mock_create_file.side_effect = side_effect_create_output_file
+            
+            mock_result = MagicMock()
+            mock_result.stdout = b"[]\n"
+            mock_result.stderr = b"fraken error\n"
+            mock_run.return_value = mock_result
+            
+            command.run(
+                None,
+                input_files=[{"path": "/test/path"}],
+                output_path=str(tmp_path),
+                task_config=task_config,
+            )
+            assert mock_run.called
+
+def test_command_no_path_in_input(tmp_path):
+    """Test when input_file lacks a 'path'."""
+    task_config = {"Manual Yara rules": "rule test {}"}
+    with patch("src.tasks.command.send_event"), \
+         patch("subprocess.run") as mock_run, \
+         patch("src.tasks.create_task_result"), \
+         patch("src.tasks.create_output_file") as mock_create_file:
+         
+        def side_effect_create_output_file(output_path, display_name, **kwargs):
+            mock_file = MagicMock()
+            mock_file.path = str(tmp_path / display_name)
+            mock_file.to_dict.return_value = {"path": mock_file.path}
+            if display_name == "fraken_out.jsonl":
+                with open(mock_file.path, "w") as f:
+                    f.write("[]\n")
+            return mock_file
+        
+        mock_create_file.side_effect = side_effect_create_output_file
+        
+        mock_result = MagicMock()
+        mock_result.stdout = b"[]\n"
+        mock_result.stderr = b""
+        mock_run.return_value = mock_result
+        
+        command.run(
+            None,
+            input_files=[{"display_name": "no_path_file"}],
+            output_path=str(tmp_path),
+            task_config=task_config,
+        )
+        assert mock_run.called
+
+def test_command_runtime_error_and_no_mountpoints(tmp_path):
+    """Test catching RuntimeError and when no mountpoints are returned."""
+    task_config = {"Manual Yara rules": "rule test {}", "mount_disk_images": True}
+    with patch("src.tasks.command.send_event"), \
+         patch("subprocess.run") as mock_run, \
+         patch("src.tasks.create_task_result"), \
+         patch("src.tasks.create_output_file") as mock_create_file, \
+         patch("src.tasks.is_disk_image", return_value=True), \
+         patch("src.tasks.BlockDevice") as mock_bd:
+         
+        def side_effect_create_output_file(output_path, display_name, **kwargs):
+            mock_file = MagicMock()
+            mock_file.path = str(tmp_path / display_name)
+            mock_file.to_dict.return_value = {"path": mock_file.path}
+            if display_name == "fraken_out.jsonl":
+                with open(mock_file.path, "w") as f:
+                    f.write("[]\n")
+            return mock_file
+        
+        mock_create_file.side_effect = side_effect_create_output_file
+        
+        mock_bd_instance = MagicMock()
+        mock_bd_instance.mount.return_value = []
+        mock_bd.return_value = mock_bd_instance
+        
+        mock_run.side_effect = RuntimeError("test runtime error")
+        
+        command.run(
+            None,
+            input_files=[{"path": "/test/disk.img", "display_name": "disk"}],
+            output_path=str(tmp_path),
+            task_config=task_config,
+        )
+        assert mock_run.called
+        mock_bd_instance.umount.assert_called_once()
     matches = [
         YaraMatch(
             filepath="file1.txt",
@@ -165,7 +268,7 @@ def test_generate_report_from_matches():
 
 
 @patch("src.tasks.command.send_event")
-@patch("src.tasks.subprocess.Popen")
+@patch("subprocess.run")
 @patch("src.tasks.create_task_result")
 @patch("src.tasks.create_output_file")
 @patch("src.tasks.is_disk_image")
@@ -173,7 +276,7 @@ def test_command_success(
     mock_is_disk_image,
     mock_create_output_file,
     mock_create_task_result,
-    mock_popen,
+    mock_run,
     mock_send_event,
     tmp_path,
 ):
@@ -194,10 +297,11 @@ def test_command_success(
 
     mock_create_output_file.side_effect = side_effect_create_output_file
 
-    # Setup mock Popen
-    mock_process = MagicMock()
-    mock_process.stderr.readlines.return_value = []
-    mock_popen.return_value = mock_process
+    # Setup mock run
+    mock_result = MagicMock()
+    mock_result.stdout = b'[{"ImagePath": "file1.txt", "SHA256": "hash", "Signature": "rule", "Description": "desc", "Reference": "ref", "Score": 100}]\n'
+    mock_result.stderr = b""
+    mock_run.return_value = mock_result
 
     mock_create_task_result.return_value = "mock_result"
 
@@ -220,12 +324,12 @@ def test_command_success(
     )
 
     assert result == "mock_result"
-    mock_popen.assert_called_once()
+    mock_run.assert_called_once()
     mock_create_task_result.assert_called_once()
 
 
 @patch("src.tasks.command.send_event")
-@patch("src.tasks.subprocess.Popen")
+@patch("subprocess.run")
 @patch("src.tasks.create_task_result")
 @patch("src.tasks.create_output_file")
 @patch("src.tasks.BlockDevice")
@@ -235,7 +339,7 @@ def test_command_with_disk_image(
     mock_block_device,
     mock_create_output_file,
     mock_create_task_result,
-    mock_popen,
+    mock_run,
     mock_send_event,
     tmp_path,
 ):
@@ -258,10 +362,11 @@ def test_command_with_disk_image(
     mock_bd_instance.mount.return_value = [str(tmp_path / "mount1")]
     mock_block_device.return_value = mock_bd_instance
 
-    # Setup mock Popen
-    mock_process = MagicMock()
-    mock_process.stderr.readlines.return_value = []
-    mock_popen.return_value = mock_process
+    # Setup mock run
+    mock_result = MagicMock()
+    mock_result.stdout = b"[]\n"
+    mock_result.stderr = b""
+    mock_run.return_value = mock_result
 
     mock_create_task_result.return_value = "mock_result"
 

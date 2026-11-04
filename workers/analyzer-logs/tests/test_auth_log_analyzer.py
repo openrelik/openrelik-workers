@@ -37,21 +37,27 @@ log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
 
 
+_cached_records = None
+
+
 def load_test_dataframe() -> pd.DataFrame:
     """Loads SSH log file and returns dataframe."""
-    log_file = os.path.join("test_data", "secure")
-    if not os.path.exists(log_file):
-        raise Exception(f"Log file {log_file} does not exist.")
+    global _cached_records
+    if _cached_records is None:
+        log_file = os.path.join("test_data", "secure")
+        if not os.path.exists(log_file):
+            raise Exception(f"Log file {log_file} does not exist.")
 
-    with open(log_file, "r", encoding="utf-8") as fh:
-        data = fh.read()
-    analyzer = LinuxSSHAnalysisTask()
-    ssh_records = analyzer.parse_log_data(data, log_file, log_year=2022)
+        with open(log_file, "r", encoding="utf-8") as fh:
+            data = fh.read()
+        analyzer = LinuxSSHAnalysisTask()
+        ssh_records = analyzer.parse_log_data(data, log_file, log_year=2022)
 
-    records = []
-    for ssh_record in ssh_records:
-        records.append(ssh_record.__dict__)
-    return pd.DataFrame(records)
+        _cached_records = []
+        for ssh_record in ssh_records:
+            _cached_records.append(ssh_record.__dict__)
+
+    return pd.DataFrame([dict(d) for d in _cached_records])
 
 
 @pytest.mark.skipif(
@@ -315,7 +321,8 @@ class TestAuthAnalyzer:
         ]
         assert self.analyzer.check_required_fields(valid_fields) is True
 
-    def test_session_duration(self):
+    # caplog is https://docs.pytest.org/en/stable/how-to/logging.html#caplog-fixture
+    def test_session_duration(self, caplog):
         """Test session_duration method."""
         # Common dataframe for the rest of the unit tests
         df = load_test_dataframe()
@@ -348,6 +355,27 @@ class TestAuthAnalyzer:
             timestamp=1665252633,
         )
         assert session_duration == 7
+
+        print("[+] Testing session without disconnection event")
+        df_no_disconnect = df[df["event_type"] != "disconnection"]
+        self.analyzer.set_dataframe(df_no_disconnect)
+        self.analyzer.parsing_warnings = []
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            session_duration = self.analyzer.session_duration(
+                session_id="7b45adc5a3d14261800c1782719f647b81b3b8013836f30893f23202"
+                "b592e000",
+                timestamp=1665252633,
+            )
+        assert session_duration == -1
+        assert len(self.analyzer.parsing_warnings) > 0
+        assert any(
+            "Error getting session end time for" in w
+            for w in self.analyzer.parsing_warnings
+        )
+        # Ensure no ERROR level logs were emitted (preventing GCP alerts)
+        errors = [rec for rec in caplog.records if rec.levelno >= logging.ERROR]
+        assert len(errors) == 0
 
     def test_get_ip_summary(self):
         """Test get_ip_summary method."""

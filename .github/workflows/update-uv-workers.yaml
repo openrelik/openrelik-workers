@@ -16,7 +16,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: set-matrix
         run: |
           SERVICES=$(find ${{ env.ROOT_DIR }} -name "uv.lock" | xargs -n 1 dirname | xargs -n 1 basename | jq -R . | jq -s -c .)
@@ -30,8 +30,8 @@ jobs:
       matrix:
         service: ${{ fromJson(needs.list-services.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
       
       - name: Update Lockfile and Capture Output
         working-directory: ${{ env.ROOT_DIR }}/${{ matrix.service }}
@@ -54,7 +54,7 @@ jobs:
     if: ${{ needs.list-services.outputs.matrix != '[]' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all updates
         uses: actions/download-artifact@v4

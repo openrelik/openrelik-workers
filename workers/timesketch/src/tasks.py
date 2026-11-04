@@ -16,6 +16,7 @@ import logging
 import os
 import time
 
+from openrelik_common import telemetry
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 from timesketch_api_client import client as timesketch_client
 from timesketch_import_client import importer
@@ -229,6 +230,10 @@ def upload(
     """
     input_files = get_input_files(pipe_result, input_files or [], filter=COMPATIBLE_INPUTS)
     task_config = task_config or {}
+
+    telemetry.add_attribute_to_current_span("input_files", input_files)
+    telemetry.add_attribute_to_current_span("task_config", task_config)
+    telemetry.add_attribute_to_current_span("workflow_id", workflow_id)
 
     if not input_files:
         logger.warning("No supported input files provided. Timesketch worker only supports CSV, JSONL, and PLASO files.")

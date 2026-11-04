@@ -3,6 +3,7 @@ import subprocess
 from celery import signals
 from celery.utils.log import get_task_logger
 
+from openrelik_common import telemetry
 # API docs - https://openrelik.github.io/openrelik-worker-common/openrelik_worker_common/index.html
 from openrelik_worker_common.file_utils import create_output_file
 from openrelik_worker_common.logging import Logger
@@ -67,6 +68,11 @@ def command(
     logger.info(f"Starting {TASK_NAME} for workflow {workflow_id}")
 
     input_files = get_input_files(pipe_result, input_files or [])
+
+    telemetry.add_attribute_to_current_span("input_files", input_files)
+    telemetry.add_attribute_to_current_span("task_config", task_config)
+    telemetry.add_attribute_to_current_span("workflow_id", workflow_id)
+
     output_files = []
     base_command = ["<REPLACE_WITH_COMMAND>"]
     base_command_string = " ".join(base_command)
@@ -82,10 +88,10 @@ def command(
 
         # Run the command
         with open(output_file.path, "w") as fh:
-            subprocess.Popen(command, stdout=fh, stderr=subprocess.PIPE)
-        if process.stderr:
-            logger.error(process.stderr.read())
-        
+            process = subprocess.Popen(command, stdout=fh, stderr=subprocess.PIPE)
+            if process.stderr:
+                logger.error(process.stderr.read())
+
         output_files.append(output_file.to_dict())
 
     return create_task_result(

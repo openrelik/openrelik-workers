@@ -14,9 +14,10 @@
 # limitations under the License.
 """Task for Linux SSH analysis."""
 
-import pytest
 import datetime
 import os
+import pandas as pd
+import pytest
 
 import src.ssh_analyzer as ssh_analyzer
 
@@ -103,3 +104,11 @@ class TestLinuxSSHAnalysisTask:
         # Invalid datetime random
         output = analyzer.parse_message_datetime(["random"], log_year=0)
         assert output is None
+
+    def test_brute_force_analysis_parsing_warnings(self):
+        """Test brute_force_analysis propagates warnings from BruteForceAnalyzer."""
+        analyzer = ssh_analyzer.LinuxSSHAnalysisTask()
+        df = pd.DataFrame([{"invalid_col": 1}])
+        analyzer.brute_force_analysis(df)
+        assert len(analyzer.parsing_warnings) > 0
+        assert any("Missing required field" in w or "requirements" in w for w in analyzer.parsing_warnings)

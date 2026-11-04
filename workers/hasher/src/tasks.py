@@ -19,6 +19,7 @@ import json
 
 from celery.utils.log import get_task_logger
 
+from openrelik_common import telemetry
 from openrelik_worker_common.file_utils import create_output_file
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 
@@ -67,6 +68,11 @@ def command(
         Base64-encoded dictionary containing task results.
     """
     input_files = get_input_files(pipe_result, input_files or [])
+
+    telemetry.add_attribute_to_current_span("input_files", input_files)
+    telemetry.add_attribute_to_current_span("task_config", task_config)
+    telemetry.add_attribute_to_current_span("workflow_id", workflow_id)
+
     output_files = []
     # General command for execution and reporting.
     # -s: Silent mode (suppresses errors to stderr, prints them to stdout)

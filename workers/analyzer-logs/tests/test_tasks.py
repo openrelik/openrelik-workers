@@ -15,7 +15,6 @@
 import base64
 import filecmp
 import json
-import os
 import time
 from threading import Thread
 from unittest.mock import patch
@@ -58,30 +57,40 @@ _INPUT_FILES_WITHOUT_SSH_EVENTS = [
     }
 ]
 
+_INPUT_FILES_WITH_WARNINGS = [
+    {
+        "id": 1,
+        "uuid": "445027ec76ef42f8a463fdbaf162d2b0",
+        "display_name": "auth.log.missing",
+        "extension": "",
+        "data_type": "file:generic",
+        "path": "test_data/non_existent_auth.log",
+    }
+]
+
+
+server = None
 
 # Start fake redis server for tests
 server_address = ("127.0.0.1", 6379)
-server = TcpFakeServer(server_address, server_type="redis")
-server_thread = Thread(target=server.serve_forever, daemon=True)
-server_thread.daemon = True
-server_thread.start()
-# Wait for the server thread to start
-time.sleep(0.1)
-
-
-def setUpModule():
-    """Executed once before any tests in this module run."""
-    os.environ["TZ"] = "UTC"
-    if hasattr(time, "tzset"):
-        time.tzset()
+try:
+    server = TcpFakeServer(server_address, server_type="redis")
+    server_thread = Thread(target=server.serve_forever, daemon=True)
+    server_thread.daemon = True
+    server_thread.start()
+    # Wait for the server thread to start
+    time.sleep(0.1)
+except OSError:
+    # Port already in use, probably by a running redis-server or another test runner.
+    pass
 
 
 def tearDownModule():
-    """Optional: Restores the environment after all tests are finished."""
-    if "TZ" in os.environ:
-        del os.environ["TZ"]
-    if hasattr(time, "tzset"):
-        time.tzset()
+    """Executed once after all tests in this module run."""
+    global server
+    if server:
+        server.shutdown()
+        server.server_close()
 
 
 class TestTasks:
@@ -154,3 +163,18 @@ class TestTasks:
             "# SSH log analyzer report\n\n\n##### Brute force analysis\n\n- No findings\n"
             in output_task_report_summary
         )
+
+    @patch("src.app.redis.Redis.from_url")
+    def test_task_report_with_parsing_warnings(self, mock_redisclient):
+        """Test that task report includes Evidence Parsing Notes section when warnings exist."""
+        output = run_ssh_analyzer(
+            input_files=_INPUT_FILES_WITH_WARNINGS,
+            output_path="/tmp",
+            workflow_id="deadbeef",
+            task_config={},
+        )
+
+        output_dict = json.loads(base64.b64decode(output))
+        output_task_report_summary = output_dict.get("task_report").get("content")
+        assert "### Evidence Parsing Notes" in output_task_report_summary
+        assert "auth.log.missing does not exist" in output_task_report_summary

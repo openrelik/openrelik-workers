@@ -55,6 +55,26 @@ class RedisTests(unittest.TestCase):
         self.assertEqual(result.summary, summary_expected)
         self.assertEqual(result.to_markdown(), report_expected)
 
+    def test_redisconfig_exploit(self):
+        """Test Redis config with exploit indicators."""
+        redis_config_exploit = (
+            '123:M 12 Mar 2022 10:00:00.000 * Background rewriting started\n'
+            '456:C 12 Mar 2022 10:00:01.000 * eval "package.loadlib(\'lib\', \'io\')" 0\n'
+        )
+        report_expected = (
+            """\n* Log destination not configured\n"""
+            """* Redis Lua sandbox escape (CVE-2022-0543) exploitation indicators """
+            """found (e.g. package.loadlib, os.execute)"""
+        )
+        summary_expected = "Insecure Redis configuration found"
+        with patch("builtins.open", mock_open(read_data=redis_config_exploit)):
+            result = analyze_config(self.input_file, {})
+
+        self.assertIsInstance(result, Report)
+        self.assertEqual(result.priority, Priority.HIGH)
+        self.assertEqual(result.summary, summary_expected)
+        self.assertEqual(result.to_markdown(), report_expected)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,6 +14,7 @@
 
 import subprocess
 
+from openrelik_common import telemetry
 from openrelik_worker_common.file_utils import create_output_file, count_file_lines
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 
@@ -61,6 +62,11 @@ def command(
         Base64-encoded dictionary containing task results.
     """
     input_files = get_input_files(pipe_result, input_files or [])
+
+    telemetry.add_attribute_to_current_span("input_files", input_files)
+    telemetry.add_attribute_to_current_span("task_config", task_config)
+    telemetry.add_attribute_to_current_span("workflow_id", workflow_id)
+
     output_files = []
     base_command = ["grep", "-Ei", task_config.get("regex")]
     base_command_string = " ".join(base_command)

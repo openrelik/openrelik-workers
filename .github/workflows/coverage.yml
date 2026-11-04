@@ -1,0 +1,40 @@
+name: Update Worker Test Coverage
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "workers/**"
+      - "scripts/update_coverage.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Run coverage script
+        run: python scripts/update_coverage.py
+
+      - name: Commit changes to README.md
+        uses: stefanzweifel/git-auto-commit-action@b863ae1933cb653a53c021fe36dbb774e1fb9403 # v5
+        with:
+          commit_message: "docs: update worker test coverage in README"
+          file_pattern: "README.md"

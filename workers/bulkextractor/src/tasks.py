@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import shlex
 import subprocess
 
+from openrelik_common import telemetry
 from openrelik_worker_common.file_utils import create_output_file
 from openrelik_worker_common.task_utils import create_task_result, get_input_files
 from openrelik_worker_common.reporting import serialize_file_report
@@ -31,8 +33,18 @@ TASK_NAME = "openrelik-worker-bulkextractor.tasks.bulkextractor"
 TASK_METADATA = {
     "display_name": "Bulkextractor",
     "description": "Runs the bulk_extractor command against a file",
-    # Configuration that will be rendered as a web for in the UI, and any data entered
-    # by the user will be available to the task function when executing (task_config).
+    "task_config": [
+        {
+            "name": "options",
+            "label": "Additional bulk_extractor options",
+            "description": (
+                "Custom command line parameters to pass to bulk_extractor"
+                " (e.g. -x all -e wordlist)"
+            ),
+            "type": "text",
+            "required": False,
+        }
+    ],
 }
 
 @celery.task(bind=True, name=TASK_NAME, metadata=TASK_METADATA)
@@ -65,8 +77,14 @@ def command(
     output_files = []
     file_reports = []
 
+    telemetry.add_attribute_to_current_span("input_files", input_files)
+    telemetry.add_attribute_to_current_span("task_config", task_config)
+    telemetry.add_attribute_to_current_span("workflow_id", workflow_id)
+
     for input_file in input_files:
         base_command = ["bulk_extractor"]
+        if task_config and task_config.get("options"):
+            base_command.extend(shlex.split(task_config.get("options")))
         report_file = create_output_file(
             output_path,
             display_name=f"Report_{input_file.get('display_name')}.html",

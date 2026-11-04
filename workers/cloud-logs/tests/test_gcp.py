@@ -19,7 +19,6 @@ import base64
 import json
 import os
 import tempfile
-
 from unittest import mock
 
 import pytest
