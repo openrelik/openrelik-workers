@@ -39,6 +39,7 @@ body:
         - openrelik-worker-extraction
         - openrelik-worker-floss
         - openrelik-worker-grep
+        - openrelik-worker-indx
         - openrelik-worker-llm
         - openrelik-worker-os-creds
         - openrelik-worker-photorec

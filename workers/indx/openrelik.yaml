@@ -1,0 +1,12 @@
+# Showcase this worker on https://openrelik.org/marketplace
+publish: true
+
+# Worker Metadata. This section is required.
+display_name: INDX Parser
+description: NTFS directory index ($I30 / INDX) parser and slack carver.
+
+# Optional: Third-Party Tools Used by the Worker.
+tools:
+  - display_name: dfdatetime
+    description: Python library for handling digital forensics date and time values.
+    url: https://github.com/log2timeline/dfdatetime

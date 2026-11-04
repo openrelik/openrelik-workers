@@ -1,0 +1,35 @@
+[project]
+authors = [
+    {name = "Jason Solomon", email = "solomonjason@gmail.com"},
+]
+requires-python = "<4.0,>=3.11"
+dependencies = [
+    "celery[redis]<6.0.0,>=5.4.0",
+    "dfdatetime>=20260730",
+    "openrelik-common>=0.7.5",
+    "openrelik-worker-common>=0.17.0",
+]
+name = "openrelik-worker-indx"
+version = "0.1.0"
+description = "NTFS directory index ($I30 / INDX) parser and slack carver"
+readme = "README.md"
+
+[dependency-groups]
+dev = [
+    { include-group = "test" },
+    "mypy>=2.3.1",
+    "ruff>=0.16.5",
+]
+test = [
+    "atheris>=3.1.0",
+    "pytest",
+    "pytest-cov<6.0.0,>=5.0.0",
+    "pytest-mock<4.0.0,>=3.14.0",
+]
+
+[tool.uv]
+default-groups = []
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true

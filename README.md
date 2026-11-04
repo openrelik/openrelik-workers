@@ -26,7 +26,7 @@ Every subfolder contains their own README with more details per worker.
 | chromecreds | 97% |
 | cloud-logs | 100% |
 | containers | 57% |
-| dfindexeddb | Failed |
+| dfindexeddb | 85% |
 | duckdb | 0% |
 | entropy | 98% |
 | exif | 96% |
@@ -34,6 +34,7 @@ Every subfolder contains their own README with more details per worker.
 | floss | 94% |
 | grep | 100% |
 | hasher | 99% |
+| indx | 95% |
 | llm | 0% |
 | os-creds | 96% |
 | photorec | 99% |
