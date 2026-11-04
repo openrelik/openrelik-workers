@@ -20,7 +20,7 @@ Every subfolder contains their own README with more details per worker.
 | Worker | Coverage |
 | --- | --- |
 | analyzer-config | 96% |
-| analyzer-logs | 86% |
+| analyzer-logs | 78% |
 | bulkextractor | 97% |
 | capa | 98% |
 | chromecreds | 97% |
