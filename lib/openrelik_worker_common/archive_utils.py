@@ -18,6 +18,8 @@ import shutil
 import subprocess
 from uuid import uuid4
 
+SUPPORTED_ARCHIVE_EXTENSIONS = (".tgz", ".tar.gz", ".tar", ".zip", ".7z")
+
 
 def extract_archive(
     input_file: dict,
@@ -52,10 +54,13 @@ def extract_archive(
     if not shutil.which("7z"):
         raise RuntimeError("7z executable not found!")
 
+    if not input_filename.lower().endswith(SUPPORTED_ARCHIVE_EXTENSIONS):
+        raise ValueError(f"Unsupported archive format: {input_filename}")
+
     export_folder = os.path.join(output_folder, uuid4().hex)
     os.makedirs(export_folder)
 
-    if input_filename.endswith((".tgz", ".tar.gz")):
+    if input_filename.lower().endswith((".tgz", ".tar.gz")):
         command = [
             "tar",
             "-vxzf",
@@ -90,9 +95,13 @@ def extract_archive(
                 command.append(pattern.strip())
 
     command_string = " ".join(command)
-    with open(log_file, "wb") as out:
-        ret = subprocess.call(command, stdout=out, stderr=out)
-    if ret != 0:
-        raise RuntimeError("7zip or tar execution error.")
+    try:
+        with open(log_file, "wb") as out:
+            ret = subprocess.call(command, stdout=out, stderr=out)
+        if ret != 0:
+            raise RuntimeError(f"7zip or tar execution error for {input_filename}")
+    except Exception:
+        shutil.rmtree(export_folder, ignore_errors=True)
+        raise
 
     return (command_string, export_folder)

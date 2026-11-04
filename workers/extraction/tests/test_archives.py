@@ -139,28 +139,73 @@ def test_extract_archive_task_no_input_files(mock_celery_task, mock_dependencies
 
     assert result == "empty_result"
     mock_dependencies["create_task_result"].assert_called_once_with(
-        output_files=[], task_files=[], workflow_id="wf1", command=""
+        output_files=[],
+        task_files=[],
+        workflow_id="wf1",
+        command="",
+        task_report=None,
     )
+
+
+def test_extract_archive_task_unsupported_file(mock_celery_task, mock_dependencies):
+    """Test extract_archive_task when extract_archive raises ValueError for unsupported file."""
+    mock_dependencies["get_input_files"].return_value = [
+        {"id": "file1", "display_name": "notes.txt", "path": "/path/to/notes.txt"}
+    ]
+    mock_log_file = Mock(path="/tmp/log", to_dict=lambda: {"id": "log1"})
+    mock_dependencies["create_output_file"].return_value = mock_log_file
+    mock_dependencies["extract_archive"].side_effect = ValueError(
+        "Unsupported archive format: notes.txt"
+    )
+    mock_dependencies["create_task_result"].return_value = "result_with_report"
+
+    result = archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        pipe_result=None,
+        input_files=[{"id": "file1", "display_name": "notes.txt"}],
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config={},
+    )
+
+    assert result == "result_with_report"
+    _, kwargs = mock_dependencies["create_task_result"].call_args
+    assert kwargs["output_files"] == []
+    assert kwargs["task_report"] is not None
+    assert "Extraction Errors" in kwargs["task_report"]["content"]
+    assert "Unsupported archive format: notes.txt" in kwargs["task_report"]["content"]
 
 
 def test_extract_archive_task_exception(mock_celery_task, mock_dependencies):
     """Test extract_archive_task when extract_archive raises an exception."""
-    mock_dependencies["get_input_files"].return_value = [{"id": "file1"}]
+    mock_dependencies["get_input_files"].return_value = [
+        {"id": "file1", "display_name": "broken.zip"}
+    ]
     mock_log_file = Mock()
     mock_log_file.path = "/tmp/log"
     mock_dependencies["create_output_file"].return_value = mock_log_file
 
     mock_dependencies["extract_archive"].side_effect = Exception("Extraction failed")
 
-    with pytest.raises(Exception, match="Extraction failed"):
-        archives.extract_archive_task.__class__.run(
-            mock_celery_task,
-            pipe_result=None,
-            input_files=[{"id": "file1"}],
-            output_path="/tmp/output",
-            workflow_id="wf1",
-            task_config={},
-        )
+    archives.extract_archive_task.__class__.run(
+        mock_celery_task,
+        pipe_result=None,
+        input_files=[{"id": "file1", "display_name": "broken.zip"}],
+        output_path="/tmp/output",
+        workflow_id="wf1",
+        task_config={},
+    )
+
+    # Failure is caught: nothing extracted, files not renamed.
+    mock_dependencies["rename"].assert_not_called()
+
+    # Task still returns a result, with the error and filename in the report.
+    mock_dependencies["create_task_result"].assert_called_once()
+    kwargs = mock_dependencies["create_task_result"].call_args.kwargs
+    assert kwargs["output_files"] == []
+    assert kwargs["task_report"] is not None
+    assert "Extraction Errors" in str(kwargs["task_report"])
+    assert "broken.zip: Extraction failed" in str(kwargs["task_report"])
 
 
 def test_extract_archive_task_file_filter_list(mock_celery_task, mock_dependencies):
@@ -300,6 +345,30 @@ def test_extracted_files_register_in_db_by_default(mock_celery_task, mock_depend
     )
 
     # call_args_list: [0] is the log file, [1] is the extracted file.
+    extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
+    assert extracted_call.kwargs.get("register_in_db") is True
+
+
+def test_extracted_files_register_in_db_when_value_is_null(
+    mock_celery_task, mock_dependencies
+):
+    """A null value (sent by clients that don't know the option) keeps the default."""
+    _run_task_with_one_extracted_file(
+        mock_celery_task, mock_dependencies, task_config={"register_in_db": None}
+    )
+
+    extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
+    assert extracted_call.kwargs.get("register_in_db") is True
+
+
+def test_extracted_files_register_in_db_when_task_config_is_none(
+    mock_celery_task, mock_dependencies
+):
+    """When task_config is None, default values are preserved and no error is raised."""
+    _run_task_with_one_extracted_file(
+        mock_celery_task, mock_dependencies, task_config=None
+    )
+
     extracted_call = mock_dependencies["create_output_file"].call_args_list[1]
     assert extracted_call.kwargs.get("register_in_db") is True
 

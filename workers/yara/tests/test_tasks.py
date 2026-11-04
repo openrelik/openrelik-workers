@@ -166,6 +166,99 @@ def test_generate_report_from_matches():
     assert report_dict.get("title") == "Yara scan report"
 
 
+def test_command_env_variable_and_dir_rules(tmp_path):
+    """Test rule loading from environment variable and directories."""
+    yara_dir = tmp_path / "rules"
+    yara_dir.mkdir()
+    (yara_dir / "test.yar").write_text("rule env_rule {}")
+    input_file = tmp_path / "input.txt"
+    input_file.write_text("test")
+
+    all_yara = _mock_output_file(tmp_path / "all.yara")
+    fraken_output = _mock_output_file(tmp_path / "fraken_out.jsonl")
+    fraken_stderr = _mock_output_file(tmp_path / "fraken_stderr.log")
+    report_file = _mock_output_file(tmp_path / "yara-scan-report.md")
+
+    def _run_with_stderr(*_, **kwargs):
+        kwargs["stdout"].write("[]\n")
+        kwargs["stderr"].write("fraken error\n")
+        return SimpleNamespace(returncode=0)
+
+    with (
+        patch.dict(os.environ, {"OPENRELIK_YARA_RULES_FOLDER": str(yara_dir)}, clear=True),
+        patch(
+            "src.tasks.create_output_file",
+            side_effect=[all_yara, fraken_output, fraken_stderr, report_file],
+        ),
+        patch("src.tasks.subprocess.run", side_effect=_run_with_stderr) as mock_run,
+        patch("src.tasks.create_task_result"),
+        patch.object(command, "send_event"),
+    ):
+        command.run(
+            None,
+            input_files=[{"path": str(input_file), "display_name": input_file.name}],
+            output_path=str(tmp_path),
+            task_config={},
+        )
+        assert mock_run.called
+        assert "rule env_rule {}" in (tmp_path / "all.yara").read_text()
+
+
+def test_command_no_path_in_input(tmp_path):
+    """Test when input_file lacks a 'path'."""
+    all_yara = _mock_output_file(tmp_path / "all.yara")
+    fraken_output = _mock_output_file(tmp_path / "fraken_out.jsonl")
+    fraken_stderr = _mock_output_file(tmp_path / "fraken_stderr.log")
+
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch(
+            "src.tasks.create_output_file",
+            side_effect=[all_yara, fraken_output, fraken_stderr],
+        ),
+        patch.object(command, "send_event"),
+    ):
+        with pytest.raises(RuntimeError, match="Input does not have a path"):
+            command.run(
+                None,
+                input_files=[{"display_name": "no_path_file"}],
+                output_path=str(tmp_path),
+                task_config={"Manual Yara rules": "rule test {}"},
+            )
+
+
+def test_command_runtime_error_and_no_mountpoints(tmp_path):
+    """Test catching RuntimeError and when no mountpoints are returned."""
+    disk_file = tmp_path / "disk.img"
+    disk_file.write_text("disk")
+
+    all_yara = _mock_output_file(tmp_path / "all.yara")
+    fraken_output = _mock_output_file(tmp_path / "fraken_out.jsonl")
+    fraken_stderr = _mock_output_file(tmp_path / "fraken_stderr.log")
+
+    mock_bd_instance = MagicMock()
+    mock_bd_instance.mount.return_value = []
+
+    with (
+        patch.dict(os.environ, {}, clear=True),
+        patch(
+            "src.tasks.create_output_file",
+            side_effect=[all_yara, fraken_output, fraken_stderr],
+        ),
+        patch("src.tasks.is_disk_image", return_value=True),
+        patch("src.tasks.BlockDevice", return_value=mock_bd_instance),
+        patch.object(command, "send_event"),
+    ):
+        with pytest.raises(RuntimeError, match="No mountpoints returned for input file"):
+            command.run(
+                None,
+                input_files=[{"path": str(disk_file), "display_name": "disk"}],
+                output_path=str(tmp_path),
+                task_config={"Manual Yara rules": "rule test {}", "mount_disk_images": True},
+            )
+        mock_bd_instance.umount.assert_called_once()
+
+
 def _mock_output_file(path):
     output_file = MagicMock()
     output_file.path = str(path)
