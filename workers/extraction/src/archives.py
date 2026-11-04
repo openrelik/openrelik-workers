@@ -59,7 +59,7 @@ TASK_METADATA = {
             "name": "register_in_db",
             "label": "Register extracted files in the database",
             "description": (
-                "When enabled (default), each extracted file is registered and appear sin the UI."
+                "When enabled (default), each extracted file is registered and appears in the UI."
             ),
             "type": "switch",
             "value": True,
@@ -119,10 +119,13 @@ def extract_archive_task(
     output_files = []
     task_files = []
     command_string = ""
+    task_config = task_config or {}
     archive_password = task_config.get("archive_password", None)
     file_filters = task_config.get("file_filter") or []
     ignore_prompts = task_config.get("ignore_prompts", True)
-    register_in_db = task_config.get("register_in_db", True)
+    # Only an explicit False opts out: clients may send null for options they
+    # don't know, and a null must not drop the extracted files.
+    register_in_db = task_config.get("register_in_db") is not False
     exclusion_patterns = task_config.get("file_exclusion", [])
     if file_filters:
         file_filters = file_filters.split(",")
