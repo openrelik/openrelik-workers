@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fdisk \
     qemu-utils \
     ntfs-3g \
+    ewf-tools \
+    btrfs-progs \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure debugging
