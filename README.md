@@ -41,5 +41,5 @@ Every subfolder contains their own README with more details per worker.
 | plaso | 90% |
 | strings | 100% |
 | timesketch | 76% |
-| yara | 99% |
+| yara | 95% |
 <!-- COVERAGE_END -->
