@@ -353,6 +353,35 @@ class TestArchiveUtils(unittest.TestCase):
         self.assertIn("-xr!*.log", result[0])
         self.assertIn(self.output_folder, result[1])
 
+    @patch("shutil.which")
+    def test_extract_archive_unsupported_extension(self, mock_which):
+        """Test that an unsupported archive extension raises ValueError."""
+        for filename in ("document.txt", "syslog.2.gz"):
+            input_file = {
+                "path": f"/path/to/{filename}",
+                "display_name": filename,
+            }
+            mock_which.return_value = True
+
+            with self.assertRaises(ValueError):
+                extract_archive(input_file, self.output_folder, self.log_file)
+
+    @patch("shutil.rmtree")
+    @patch("subprocess.call")
+    @patch("shutil.which")
+    def test_extract_archive_cleanup_on_failure(
+        self, mock_which, mock_subprocess_call, mock_rmtree
+    ):
+        """Test that export_folder is cleaned up if subprocess fails."""
+        input_file = {"path": "/path/to/archive.zip", "display_name": "archive.zip"}
+        mock_which.return_value = True
+        mock_subprocess_call.return_value = 1
+
+        with self.assertRaises(RuntimeError):
+            extract_archive(input_file, self.output_folder, self.log_file)
+
+        mock_rmtree.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
