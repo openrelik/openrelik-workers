@@ -149,6 +149,7 @@ def extract_archive_task(
             display_name=f"extract_archives_{input_file.get('display_name')}.log",
         )
 
+        export_directory = None
         try:
             (command_string, export_directory) = extract_archive(
                 input_file,
@@ -161,8 +162,14 @@ def extract_archive_task(
             )
             logger.info(f"Executed extract_archive command: {command_string}")
         except Exception as e:
-            logger.error(f"extract_archive failed: {e}")
-            errors.append(str(e))
+            display_name = input_file.get("display_name") or "unknown"
+            logger.error(f"extract_archive failed for {display_name}: {e}")
+            err_msg = str(e)
+            if display_name not in err_msg:
+                err_msg = f"{display_name}: {err_msg}"
+            errors.append(err_msg)
+            if export_directory and os.path.isdir(export_directory):
+                shutil.rmtree(export_directory, ignore_errors=True)
             continue
         finally:
             if os.path.isfile(log_file.path):
@@ -192,7 +199,7 @@ def extract_archive_task(
     if errors:
         report = Report("Archive Extraction Report")
         section = report.add_section()
-        section.add_header("Unsupported Files")
+        section.add_header("Extraction Errors")
         for error in errors:
             section.add_bullet(error)
         task_report = report.to_dict()

@@ -95,9 +95,13 @@ def extract_archive(
                 command.append(pattern.strip())
 
     command_string = " ".join(command)
-    with open(log_file, "wb") as out:
-        ret = subprocess.call(command, stdout=out, stderr=out)
-    if ret != 0:
-        raise RuntimeError("7zip or tar execution error.")
+    try:
+        with open(log_file, "wb") as out:
+            ret = subprocess.call(command, stdout=out, stderr=out)
+        if ret != 0:
+            raise RuntimeError(f"7zip or tar execution error for {input_filename}")
+    except Exception:
+        shutil.rmtree(export_folder, ignore_errors=True)
+        raise
 
     return (command_string, export_folder)

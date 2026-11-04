@@ -172,12 +172,15 @@ def test_extract_archive_task_unsupported_file(mock_celery_task, mock_dependenci
     _, kwargs = mock_dependencies["create_task_result"].call_args
     assert kwargs["output_files"] == []
     assert kwargs["task_report"] is not None
+    assert "Extraction Errors" in kwargs["task_report"]["content"]
     assert "Unsupported archive format: notes.txt" in kwargs["task_report"]["content"]
 
 
 def test_extract_archive_task_exception(mock_celery_task, mock_dependencies):
     """Test extract_archive_task when extract_archive raises an exception."""
-    mock_dependencies["get_input_files"].return_value = [{"id": "file1"}]
+    mock_dependencies["get_input_files"].return_value = [
+        {"id": "file1", "display_name": "broken.zip"}
+    ]
     mock_log_file = Mock()
     mock_log_file.path = "/tmp/log"
     mock_dependencies["create_output_file"].return_value = mock_log_file
@@ -187,22 +190,22 @@ def test_extract_archive_task_exception(mock_celery_task, mock_dependencies):
     archives.extract_archive_task.__class__.run(
         mock_celery_task,
         pipe_result=None,
-        input_files=[{"id": "file1"}],
+        input_files=[{"id": "file1", "display_name": "broken.zip"}],
         output_path="/tmp/output",
         workflow_id="wf1",
         task_config={},
     )
 
-    # Failure is swallowed: nothing extracted, nothing cleaned up.
+    # Failure is caught: nothing extracted, files not renamed.
     mock_dependencies["rename"].assert_not_called()
-    mock_dependencies["rmtree"].assert_not_called()
 
-    # Task still returns a result, with the error in the report.
+    # Task still returns a result, with the error and filename in the report.
     mock_dependencies["create_task_result"].assert_called_once()
     kwargs = mock_dependencies["create_task_result"].call_args.kwargs
     assert kwargs["output_files"] == []
     assert kwargs["task_report"] is not None
-    assert "Extraction failed" in str(kwargs["task_report"])
+    assert "Extraction Errors" in str(kwargs["task_report"])
+    assert "broken.zip: Extraction failed" in str(kwargs["task_report"])
 
 
 def test_extract_archive_task_file_filter_list(mock_celery_task, mock_dependencies):
