@@ -1,3 +1,13 @@
+> [!IMPORTANT]
+> **This repository has moved to [openrelik/openrelik](https://github.com/openrelik/openrelik),**
+> the OpenRelik monorepo, where it lives in [`workers/`](https://github.com/openrelik/openrelik/tree/main/workers).
+> This repository is archived and read-only.
+>
+> The full history moved with it. Open issues were moved too. Please open new issues and pull requests in
+> [openrelik/openrelik](https://github.com/openrelik/openrelik).
+>
+> Each worker is in `workers/<name>/`, and the openrelik-worker-common library is in [`libs/worker-common/`](https://github.com/openrelik/openrelik/tree/main/libs/worker-common).
+
 # OpenRelik Workers Repository
 
 This repository contains all OpenRelik Core Workers.
